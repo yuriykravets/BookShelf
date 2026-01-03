@@ -5,12 +5,12 @@ plugins {
 
 android {
     namespace 'com.example.bookshelf'
-    compileSdk 33
+    compileSdk 35
 
     defaultConfig {
         applicationId 'com.partitionsoft.bookshelf'
         minSdk 24
-        targetSdk 33
+        targetSdk 35
         versionCode 1
         versionName "1.1"
 
@@ -37,7 +37,7 @@ android {
         compose true
     }
     composeOptions {
-        kotlinCompilerExtensionVersion '1.2.0'
+        kotlinCompilerExtensionVersion = "1.5.8"
     }
     packagingOptions {
         resources {
