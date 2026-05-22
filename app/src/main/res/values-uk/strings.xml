@@ -99,4 +99,28 @@
     <string name="ai_prompt_productivity_query">Хочу практичні книги про продуктивність</string>
     <string name="ai_assistant_input_hint">Опишіть, що ви хочете почитати</string>
     <string name="ai_assistant_send">Надіслати запит</string>
+    <string name="library_filter_all">Усі</string>
+    <string name="library_filter_in_progress">У процесі</string>
+    <string name="library_filter_unread">Непрочитані</string>
+    <string name="library_filter_pdf">PDF</string>
+    <string name="library_filter_epub">EPUB</string>
+    <string name="library_filter_fb2">FB2</string>
+    <string name="library_filter_empty_title">Нічого не знайдено</string>
+    <string name="library_filter_empty_subtitle">Спробуйте інший фільтр, щоб побачити книги.</string>
+
+    <string name="badge_first_book">Перша книга</string>
+    <string name="badge_first_book_supporting">Ви почали свою читацьку подорож</string>
+    <string name="badge_five_books">П’ять книг</string>
+    <string name="badge_five_books_supporting">Ви в чудовому темпі</string>
+    <string name="badge_100_pages">100 сторінок</string>
+    <string name="badge_100_pages_supporting">Справжній книголюб</string>
+    <string name="badge_500_pages">500 сторінок</string>
+    <string name="badge_500_pages_supporting">Читацький марафон</string>
+    <string name="badge_streak_3">Серія 3 дні</string>
+    <string name="badge_streak_3_supporting">Послідовність винагороджується</string>
+    <string name="badge_streak_7">Серія 7 днів</string>
+    <string name="badge_streak_7_supporting">Сильний тиждень читання</string>
+    <string name="badge_streak_14">Серія 14 днів</string>
+    <string name="badge_streak_14_supporting">Два тижні читання</string>
+    <string name="library_badges_title">Досягнення</string>
 </resources>
