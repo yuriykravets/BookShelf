@@ -13,8 +13,8 @@ android {
         applicationId 'com.partitionsoft.bookshelf'
         minSdk 24
         targetSdk 35
-        versionCode 14
-        versionName "2.1.0"
+        versionCode 15
+        versionName "2.1.1"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -67,6 +67,7 @@ dependencies {
     implementation 'androidx.compose.material3:material3'
     implementation 'androidx.compose.material:material-icons-core'
     implementation 'androidx.compose.material:material-icons-extended'
+    implementation 'androidx.compose.foundation:foundation:1.11.2'
     debugImplementation 'androidx.compose.ui:ui-tooling'
     debugImplementation 'androidx.compose.ui:ui-test-manifest'
 
