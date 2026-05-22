@@ -99,4 +99,28 @@
     <string name="ai_prompt_productivity_query">I want practical productivity books</string>
     <string name="ai_assistant_input_hint">Describe what you want to read</string>
     <string name="ai_assistant_send">Send prompt</string>
+    <string name="library_filter_all">All</string>
+    <string name="library_filter_in_progress">In progress</string>
+    <string name="library_filter_unread">Unread</string>
+    <string name="library_filter_pdf">PDF</string>
+    <string name="library_filter_epub">EPUB</string>
+    <string name="library_filter_fb2">FB2</string>
+    <string name="library_filter_empty_title">No matches yet</string>
+    <string name="library_filter_empty_subtitle">Try a different filter to see your books.</string>
+
+    <string name="badge_first_book">First book</string>
+    <string name="badge_first_book_supporting">You started your reading journey</string>
+    <string name="badge_five_books">Five books</string>
+    <string name="badge_five_books_supporting">You are on a roll</string>
+    <string name="badge_100_pages">100 pages</string>
+    <string name="badge_100_pages_supporting">Page turner</string>
+    <string name="badge_500_pages">500 pages</string>
+    <string name="badge_500_pages_supporting">Reading marathon</string>
+    <string name="badge_streak_3">3-day streak</string>
+    <string name="badge_streak_3_supporting">Consistency wins</string>
+    <string name="badge_streak_7">7-day streak</string>
+    <string name="badge_streak_7_supporting">One week strong</string>
+    <string name="badge_streak_14">14-day streak</string>
+    <string name="badge_streak_14_supporting">Two weeks of reading</string>
+    <string name="library_badges_title">Milestones</string>
 </resources>
