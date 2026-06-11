@@ -2,13 +2,11 @@ package com.partitionsoft.bookshelf.ui
 
 import android.content.Intent
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.material.MaterialTheme as Material2Theme
 import androidx.compose.material.Surface as Material2Surface
 import androidx.compose.runtime.Composable
@@ -128,6 +126,7 @@ fun BooksApp(
             modifier = modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .consumeWindowInsets(innerPadding)
         ) {
 
         composable(route = BooksDestinations.HOME_ROUTE) {
@@ -367,9 +366,7 @@ private fun BooksAppContent(
     onAiFabIntroFinished: () -> Unit
 ) {
     Scaffold(
-        modifier = modifier
-            .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.systemBars),
+        modifier = modifier.fillMaxSize(),
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         floatingActionButton = {
             if (!isSearchActive) {
