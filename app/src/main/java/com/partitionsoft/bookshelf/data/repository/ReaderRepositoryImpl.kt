@@ -1,8 +1,10 @@
 package com.partitionsoft.bookshelf.data.repository
 
 import android.content.ContentResolver
+import android.content.Intent
 import android.net.Uri
 import android.provider.OpenableColumns
+import androidx.core.net.toUri
 import com.partitionsoft.bookshelf.data.local.ReaderDocumentDao
 import com.partitionsoft.bookshelf.data.local.ReaderDocumentEntity
 import com.partitionsoft.bookshelf.data.local.ReaderProgressEntity
@@ -84,5 +86,15 @@ class ReaderRepositoryImpl @Inject constructor(
             )
         )
     }
-}
 
+    override suspend fun deleteDocument(documentId: Long): Result<Unit> = runCatching {
+        val document = readerDocumentDao.getDocumentById(documentId) ?: return@runCatching
+        runCatching {
+            contentResolver.releasePersistableUriPermission(
+                document.uri.toUri(),
+                Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+        }
+        readerDocumentDao.deleteDocument(documentId)
+    }
+}

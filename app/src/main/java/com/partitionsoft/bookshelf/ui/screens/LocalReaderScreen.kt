@@ -46,6 +46,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -80,6 +81,7 @@ import com.partitionsoft.bookshelf.ui.LocalReaderUiState
 import com.partitionsoft.bookshelf.ui.LocalReaderViewModel
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import androidx.core.graphics.createBitmap
 
 @Composable
 fun LocalReaderRoute(
@@ -232,11 +234,7 @@ private fun PdfReaderContent(
                     maxPixels = 8_000_000
                 )
 
-                val rendered = Bitmap.createBitmap(
-                    targetWidth,
-                    targetHeight,
-                    Bitmap.Config.ARGB_8888
-                )
+                val rendered = createBitmap(targetWidth, targetHeight)
                 // Many PDFs draw transparent background; force white page for readable text.
                 rendered.eraseColor(Color.WHITE)
                 page.render(rendered, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
@@ -402,49 +400,52 @@ private fun EpubPlaceholder(
                 overflow = TextOverflow.Ellipsis
             )
         }
-        AndroidView(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .background(androidx.compose.ui.graphics.Color.White),
-            factory = { context ->
-                WebView(context).apply {
-                    settings.javaScriptEnabled = false
-                    settings.domStorageEnabled = false
-                    settings.setSupportZoom(true)
-                    settings.builtInZoomControls = true
-                    settings.displayZoomControls = false
-                    settings.useWideViewPort = true
-                    settings.loadWithOverviewMode = true
-                    settings.textZoom = textZoom
-                    webViewClient = WebViewClient()
-                    installHorizontalPageFlingNavigation(
-                        onSwipeLeft = {
-                            chapterIndex = (chapterIndex + 1).coerceAtMost(publication.chapters.lastIndex)
-                        },
-                        onSwipeRight = {
-                            chapterIndex = (chapterIndex - 1).coerceAtLeast(0)
-                        }
-                    )
+        key(document.uri, chapterIndex, isDarkTheme) {
+            AndroidView(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .background(androidx.compose.ui.graphics.Color.White),
+                factory = { context ->
+                    WebView(context).apply {
+                        settings.javaScriptEnabled = false
+                        settings.domStorageEnabled = false
+                        settings.setSupportZoom(true)
+                        settings.builtInZoomControls = true
+                        settings.displayZoomControls = false
+                        settings.useWideViewPort = true
+                        settings.loadWithOverviewMode = true
+                        settings.textZoom = textZoom
+                        webViewClient = WebViewClient()
+                        installHorizontalPageFlingNavigation(
+                            onSwipeLeft = {
+                                chapterIndex = (chapterIndex + 1).coerceAtMost(publication.chapters.lastIndex)
+                            },
+                            onSwipeRight = {
+                                chapterIndex = (chapterIndex - 1).coerceAtLeast(0)
+                            }
+                        )
+                    }
+                },
+                update = { webView ->
+                    webView.settings.textZoom = textZoom
+                    val contentKey = "${document.uri}-${chapterIndex}-${isDarkTheme}"
+                    webView.setBackgroundColor(if (isDarkTheme) Color.parseColor("#111827") else Color.WHITE)
+                    if (webView.tag != contentKey) {
+                        val html = buildReadableEpubHtml(chapter.html, isDarkTheme)
+                        webView.tag = contentKey
+                        webView.loadDataWithBaseURL(
+                            "https://bookshelf.local/epub/${document.id}/$chapterIndex/",
+                            html,
+                            "text/html",
+                            "utf-8",
+                            null
+                        )
+                        webView.post { webView.scrollTo(0, 0) }
+                    }
                 }
-            },
-            update = { webView ->
-                webView.settings.textZoom = textZoom
-                val contentKey = "${document.uri}-${chapterIndex}-${isDarkTheme}"
-                webView.setBackgroundColor(if (isDarkTheme) Color.parseColor("#111827") else Color.WHITE)
-                if (webView.tag != contentKey) {
-                    val html = buildReadableEpubHtml(chapter.html, isDarkTheme)
-                    webView.tag = contentKey
-                    webView.loadDataWithBaseURL(
-                        null,
-                        html,
-                        "text/html",
-                        "utf-8",
-                        null
-                    )
-                }
-            }
-        )
+            )
+        }
         if (showControls) {
             ZoomControls(
                 valueLabel = stringResource(id = R.string.reader_text_size, textZoom),
@@ -549,49 +550,52 @@ private fun Fb2ReaderContent(
                 overflow = TextOverflow.Ellipsis
             )
         }
-        AndroidView(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .background(androidx.compose.ui.graphics.Color.White),
-            factory = { context ->
-                WebView(context).apply {
-                    settings.javaScriptEnabled = false
-                    settings.domStorageEnabled = false
-                    settings.setSupportZoom(true)
-                    settings.builtInZoomControls = true
-                    settings.displayZoomControls = false
-                    settings.useWideViewPort = true
-                    settings.loadWithOverviewMode = true
-                    settings.textZoom = textZoom
-                    webViewClient = WebViewClient()
-                    installHorizontalPageFlingNavigation(
-                        onSwipeLeft = {
-                            chapterIndex = (chapterIndex + 1).coerceAtMost(publication.chapters.lastIndex)
-                        },
-                        onSwipeRight = {
-                            chapterIndex = (chapterIndex - 1).coerceAtLeast(0)
-                        }
-                    )
+        key(document.uri, chapterIndex, isDarkTheme) {
+            AndroidView(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .background(androidx.compose.ui.graphics.Color.White),
+                factory = { context ->
+                    WebView(context).apply {
+                        settings.javaScriptEnabled = false
+                        settings.domStorageEnabled = false
+                        settings.setSupportZoom(true)
+                        settings.builtInZoomControls = true
+                        settings.displayZoomControls = false
+                        settings.useWideViewPort = true
+                        settings.loadWithOverviewMode = true
+                        settings.textZoom = textZoom
+                        webViewClient = WebViewClient()
+                        installHorizontalPageFlingNavigation(
+                            onSwipeLeft = {
+                                chapterIndex = (chapterIndex + 1).coerceAtMost(publication.chapters.lastIndex)
+                            },
+                            onSwipeRight = {
+                                chapterIndex = (chapterIndex - 1).coerceAtLeast(0)
+                            }
+                        )
+                    }
+                },
+                update = { webView ->
+                    webView.settings.textZoom = textZoom
+                    val contentKey = "${document.uri}-${chapterIndex}-${isDarkTheme}"
+                    webView.setBackgroundColor(if (isDarkTheme) Color.parseColor("#111827") else Color.WHITE)
+                    if (webView.tag != contentKey) {
+                        val html = buildReadableEpubHtml(chapter.html, isDarkTheme)
+                        webView.tag = contentKey
+                        webView.loadDataWithBaseURL(
+                            "https://bookshelf.local/fb2/${document.id}/$chapterIndex/",
+                            html,
+                            "text/html",
+                            "utf-8",
+                            null
+                        )
+                        webView.post { webView.scrollTo(0, 0) }
+                    }
                 }
-            },
-            update = { webView ->
-                webView.settings.textZoom = textZoom
-                val contentKey = "${document.uri}-${chapterIndex}-${isDarkTheme}"
-                webView.setBackgroundColor(if (isDarkTheme) Color.parseColor("#111827") else Color.WHITE)
-                if (webView.tag != contentKey) {
-                    val html = buildReadableEpubHtml(chapter.html, isDarkTheme)
-                    webView.tag = contentKey
-                    webView.loadDataWithBaseURL(
-                        null,
-                        html,
-                        "text/html",
-                        "utf-8",
-                        null
-                    )
-                }
-            }
-        )
+            )
+        }
         if (showControls) {
             ZoomControls(
                 valueLabel = stringResource(id = R.string.reader_text_size, textZoom),
@@ -842,4 +846,3 @@ private fun buildReadableEpubHtml(rawHtml: String, isDarkTheme: Boolean): String
         </html>
     """.trimIndent()
 }
-

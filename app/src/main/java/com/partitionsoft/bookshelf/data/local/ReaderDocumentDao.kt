@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -44,5 +45,16 @@ interface ReaderDocumentDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertProgress(progress: ReaderProgressEntity)
-}
 
+    @Query("DELETE FROM reader_progress WHERE documentId = :documentId")
+    suspend fun deleteProgress(documentId: Long)
+
+    @Query("DELETE FROM reader_documents WHERE id = :documentId")
+    suspend fun deleteDocumentRow(documentId: Long)
+
+    @Transaction
+    suspend fun deleteDocument(documentId: Long) {
+        deleteProgress(documentId)
+        deleteDocumentRow(documentId)
+    }
+}

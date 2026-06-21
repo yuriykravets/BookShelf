@@ -54,8 +54,15 @@
     <string name="rating_no_count">(новинка)</string>
     <string name="library_title">Моя бібліотека</string>
     <string name="import_book">Імпортувати книгу</string>
+    <string name="library_import_error">Файл не підтримується або його не вдалося прочитати</string>
     <string name="library_empty_title">Ваша бібліотека порожня</string>
     <string name="library_empty_subtitle">Імпортуйте файли EPUB, FB2 або PDF, щоб читати їх офлайн у додатку.</string>
+    <string name="delete_book">Видалити книгу</string>
+    <string name="cancel">Скасувати</string>
+    <string name="library_delete_title">Видалити книгу?</string>
+    <string name="library_delete_message">Прибрати «%1$s» з вашої бібліотеки?</string>
+    <string name="library_delete_success">Книгу видалено з бібліотеки</string>
+    <string name="library_delete_error">Не вдалося видалити книгу</string>
     <string name="continue_reading_at">Продовжити з %1$s</string>
     <string name="page_position">Сторінка %1$d з %2$d</string>
     <string name="chapter_position">Розділ %1$d з %2$d</string>

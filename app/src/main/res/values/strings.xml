@@ -54,8 +54,15 @@
     <string name="rating_no_count">(new)</string>
     <string name="library_title">My library</string>
     <string name="import_book">Import book</string>
+    <string name="library_import_error">Unsupported or unreadable file</string>
     <string name="library_empty_title">Your library is empty</string>
     <string name="library_empty_subtitle">Import EPUB, FB2, or PDF files to read them offline in the app.</string>
+    <string name="delete_book">Delete book</string>
+    <string name="cancel">Cancel</string>
+    <string name="library_delete_title">Delete book?</string>
+    <string name="library_delete_message">Remove &quot;%1$s&quot; from your library?</string>
+    <string name="library_delete_success">Book removed from library</string>
+    <string name="library_delete_error">Unable to remove book</string>
     <string name="continue_reading_at">Continue at %1$s</string>
     <string name="page_position">Page %1$d of %2$d</string>
     <string name="chapter_position">Chapter %1$d of %2$d</string>
