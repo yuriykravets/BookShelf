@@ -14,5 +14,6 @@ interface ReaderRepository {
     suspend fun getDocument(documentId: Long): ReaderDocument?
 
     suspend fun updateProgress(documentId: Long, location: String)
-}
 
+    suspend fun deleteDocument(documentId: Long): Result<Unit>
+}

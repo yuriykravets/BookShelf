@@ -61,7 +61,7 @@ data class LibraryUiState(
 
 sealed interface LibraryEvent {
     data class OpenDocument(val id: Long) : LibraryEvent
-    data class Message(val text: String) : LibraryEvent
+    data class Message(@StringRes val messageRes: Int) : LibraryEvent
 }
 
 @HiltViewModel
@@ -109,8 +109,20 @@ class LibraryViewModel @Inject constructor(
             result.onSuccess { document ->
                 _events.emit(LibraryEvent.OpenDocument(document.id))
             }.onFailure {
-                _events.emit(LibraryEvent.Message("Unsupported or unreadable file"))
+                _events.emit(LibraryEvent.Message(R.string.library_import_error))
             }
+        }
+    }
+
+    fun deleteDocument(documentId: Long) {
+        viewModelScope.launch {
+            readerRepository.deleteDocument(documentId)
+                .onSuccess {
+                    _events.emit(LibraryEvent.Message(R.string.library_delete_success))
+                }
+                .onFailure {
+                    _events.emit(LibraryEvent.Message(R.string.library_delete_error))
+                }
         }
     }
 

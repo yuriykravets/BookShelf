@@ -31,6 +31,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
@@ -39,8 +41,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -91,6 +96,8 @@ fun LibraryRoute(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val spacing = LocalSpacing.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    var documentPendingDelete by remember { mutableStateOf<ReaderDocument?>(null) }
 
     val importLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -110,12 +117,45 @@ fun LibraryRoute(
         viewModel.events.collect { event ->
             when (event) {
                 is LibraryEvent.OpenDocument -> onOpenDocument(event.id)
-                is LibraryEvent.Message -> Unit
+                is LibraryEvent.Message -> snackbarHostState.showSnackbar(
+                    message = context.getString(event.messageRes)
+                )
             }
         }
     }
 
+    documentPendingDelete?.let { document ->
+        AlertDialog(
+            onDismissRequest = { documentPendingDelete = null },
+            title = { Text(text = stringResource(id = R.string.library_delete_title)) },
+            text = {
+                Text(
+                    text = stringResource(
+                        id = R.string.library_delete_message,
+                        document.title
+                    )
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        documentPendingDelete = null
+                        viewModel.deleteDocument(document.id)
+                    }
+                ) {
+                    Text(text = stringResource(id = R.string.delete_book))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { documentPendingDelete = null }) {
+                    Text(text = stringResource(id = R.string.cancel))
+                }
+            }
+        )
+    }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             InkwellTopBar(
                 title = stringResource(id = R.string.library_title),
@@ -174,7 +214,11 @@ fun LibraryRoute(
                         }
                     } else {
                         items(uiState.filteredDocuments, key = { it.id }) { document ->
-                            LibraryDocumentRow(document = document, onOpen = { onOpenDocument(document.id) })
+                            LibraryDocumentRow(
+                                document = document,
+                                onOpen = { onOpenDocument(document.id) },
+                                onDelete = { documentPendingDelete = document }
+                            )
                         }
                     }
                 }
@@ -186,7 +230,8 @@ fun LibraryRoute(
 @Composable
 private fun LibraryDocumentRow(
     document: ReaderDocument,
-    onOpen: () -> Unit
+    onOpen: () -> Unit,
+    onDelete: () -> Unit
 ) {
     val spacing = LocalSpacing.current
     val isDarkTheme = MaterialTheme.colorScheme.background.luminance() < 0.5f
@@ -214,37 +259,49 @@ private fun LibraryDocumentRow(
         elevation = CardDefaults.cardElevation(defaultElevation = if (isDarkTheme) 8.dp else 3.dp),
         colors = CardDefaults.cardColors(containerColor = containerColor)
     ) {
-        Column(
+        Row(
             modifier = Modifier.padding(spacing.md),
-            verticalArrangement = Arrangement.spacedBy(spacing.xs)
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(spacing.sm)
         ) {
-            Text(
-                text = document.title,
-                style = MaterialTheme.typography.titleMedium,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(spacing.xs)) {
-                Box(
-                    modifier = Modifier
-                        .padding(top = 1.dp)
-                ) {
-                    Text(
-                        text = document.format.name,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(spacing.xs)
+            ) {
+                Text(
+                    text = document.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(spacing.xs)) {
+                    Box(
+                        modifier = Modifier
+                            .padding(top = 1.dp)
+                    ) {
+                        Text(
+                            text = document.format.name,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    if (!document.lastLocation.isNullOrBlank()) {
+                        Text(
+                            text = stringResource(
+                                id = R.string.continue_reading_at,
+                                document.lastLocation
+                            ),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
-                if (!document.lastLocation.isNullOrBlank()) {
-                    Text(
-                        text = stringResource(
-                            id = R.string.continue_reading_at,
-                            document.lastLocation
-                        ),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+            }
+            IconButton(onClick = onDelete) {
+                Icon(
+                    imageVector = Icons.Filled.Delete,
+                    contentDescription = stringResource(id = R.string.delete_book)
+                )
             }
         }
     }
