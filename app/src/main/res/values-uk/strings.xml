@@ -68,6 +68,14 @@
     <string name="chapter_position">Розділ %1$d з %2$d</string>
     <string name="reader_pdf_zoom">Масштаб %1$d%%</string>
     <string name="reader_text_size">Розмір тексту %1$d%%</string>
+    <string name="reader_add_bookmark">Додати закладку</string>
+    <string name="reader_bookmarks">Закладки</string>
+    <string name="reader_bookmarks_empty">Закладок поки що немає.</string>
+    <string name="reader_delete_bookmark">Видалити закладку</string>
+    <string name="reader_current_position">Розділ %1$d, позиція %2$d</string>
+    <string name="reader_bookmark_position">Розділ %1$d, позиція %2$d</string>
+    <string name="close">Закрити</string>
+    <string name="reader_bookmark_added">Закладка збережена</string>
     <string name="previous_page">Попередня</string>
     <string name="next_page">Наступна</string>
     <string name="epub_phase_one_message">Механізм перегляду EPUB ще в розробці. Ви вже можете імпортувати EPUB-файли, а повноцінне відображення з’явиться в наступному етапі.</string>

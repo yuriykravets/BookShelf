@@ -31,6 +31,15 @@ interface ReaderDocumentDao {
     )
     fun observeContinueReading(): Flow<ReaderDocumentWithProgress?>
 
+    @Query(
+        """
+        SELECT * FROM reader_bookmarks
+        WHERE documentId = :documentId
+        ORDER BY chapterIndex ASC, scrollY ASC, createdAtMillis DESC
+        """
+    )
+    fun observeBookmarks(documentId: Long): Flow<List<ReaderBookmarkEntity>>
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertDocument(document: ReaderDocumentEntity): Long
 
@@ -46,8 +55,17 @@ interface ReaderDocumentDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertProgress(progress: ReaderProgressEntity)
 
+    @Insert
+    suspend fun insertBookmark(bookmark: ReaderBookmarkEntity): Long
+
+    @Query("DELETE FROM reader_bookmarks WHERE id = :bookmarkId")
+    suspend fun deleteBookmark(bookmarkId: Long)
+
     @Query("DELETE FROM reader_progress WHERE documentId = :documentId")
     suspend fun deleteProgress(documentId: Long)
+
+    @Query("DELETE FROM reader_bookmarks WHERE documentId = :documentId")
+    suspend fun deleteBookmarks(documentId: Long)
 
     @Query("DELETE FROM reader_documents WHERE id = :documentId")
     suspend fun deleteDocumentRow(documentId: Long)
@@ -55,6 +73,7 @@ interface ReaderDocumentDao {
     @Transaction
     suspend fun deleteDocument(documentId: Long) {
         deleteProgress(documentId)
+        deleteBookmarks(documentId)
         deleteDocumentRow(documentId)
     }
 }

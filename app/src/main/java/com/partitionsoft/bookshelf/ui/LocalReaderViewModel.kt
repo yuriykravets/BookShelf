@@ -3,6 +3,7 @@ package com.partitionsoft.bookshelf.ui
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.partitionsoft.bookshelf.domain.model.ReaderBookmark
 import com.partitionsoft.bookshelf.domain.model.ReaderDocument
 import com.partitionsoft.bookshelf.domain.model.ReaderDocumentFormat
 import com.partitionsoft.bookshelf.domain.model.ReadingSessionRecord
@@ -11,8 +12,11 @@ import com.partitionsoft.bookshelf.domain.repository.ReaderRepository
 import com.partitionsoft.bookshelf.ui.navigation.BooksDestinations
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -34,6 +38,11 @@ class LocalReaderViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow<LocalReaderUiState>(LocalReaderUiState.Loading)
     val uiState: StateFlow<LocalReaderUiState> = _uiState.asStateFlow()
+
+    val bookmarks: StateFlow<List<ReaderBookmark>> = (
+        documentId?.let { readerRepository.observeBookmarks(it) }
+            ?: emptyFlow()
+        ).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private var sessionStartedAtMillis: Long? = null
     private var activeDocument: ReaderDocument? = null
@@ -60,7 +69,7 @@ class LocalReaderViewModel @Inject constructor(
     }
 
     fun updateProgress(location: String) {
-        val reached = location.toIntOrNull()?.plus(1) ?: 0
+        val reached = location.chapterIndexOrNull()?.plus(1) ?: 0
         pagesReachedInSession = maxOf(pagesReachedInSession, reached)
         viewModelScope.launch {
             val safeDocumentId = documentId ?: return@launch
@@ -68,11 +77,24 @@ class LocalReaderViewModel @Inject constructor(
         }
     }
 
+    fun addBookmark(chapterIndex: Int, scrollY: Int, title: String) {
+        viewModelScope.launch {
+            val safeDocumentId = documentId ?: return@launch
+            readerRepository.addBookmark(safeDocumentId, chapterIndex, scrollY, title)
+        }
+    }
+
+    fun deleteBookmark(bookmarkId: Long) {
+        viewModelScope.launch {
+            readerRepository.deleteBookmark(bookmarkId)
+        }
+    }
+
     fun onReadingSessionStart() {
         if (sessionStartedAtMillis != null) return
         val document = (uiState.value as? LocalReaderUiState.Ready)?.document ?: return
         activeDocument = document
-        pagesReachedInSession = document.lastLocation?.toIntOrNull()?.plus(1)?.coerceAtLeast(0) ?: 0
+        pagesReachedInSession = document.lastLocation?.chapterIndexOrNull()?.plus(1)?.coerceAtLeast(0) ?: 0
         sessionStartedAtMillis = System.currentTimeMillis()
     }
 
@@ -98,5 +120,6 @@ class LocalReaderViewModel @Inject constructor(
         }
         pagesReachedInSession = 0
     }
-}
 
+    private fun String.chapterIndexOrNull(): Int? = substringBefore(':').toIntOrNull()
+}

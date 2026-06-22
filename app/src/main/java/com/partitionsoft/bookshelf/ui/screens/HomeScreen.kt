@@ -502,7 +502,7 @@ private fun ContinueReadingCard(
 
 @Composable
 private fun continueReadingProgressLabel(document: ReaderDocument): String {
-    val index = document.lastLocation?.toIntOrNull()?.plus(1)
+    val index = document.lastLocation?.substringBefore(':')?.toIntOrNull()?.plus(1)
     return when (document.format) {
         ReaderDocumentFormat.PDF -> {
             if (index != null && index > 0) {

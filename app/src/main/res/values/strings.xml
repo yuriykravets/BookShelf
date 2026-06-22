@@ -68,6 +68,15 @@
     <string name="chapter_position">Chapter %1$d of %2$d</string>
     <string name="reader_pdf_zoom">Zoom %1$d%%</string>
     <string name="reader_text_size">Text size %1$d%%</string>
+    <string name="reader_add_bookmark">Add bookmark</string>
+    <string name="reader_bookmarks">Bookmarks</string>
+    <string name="reader_bookmarks_empty">No bookmarks yet.</string>
+    <string name="reader_delete_bookmark">Delete bookmark</string>
+    <string name="reader_current_position">Chapter %1$d, location %2$d</string>
+    <string name="reader_bookmark_position">Chapter %1$d, location %2$d</string>
+    <string name="reader_bookmark_added">Bookmark saved</string>
+
+    <string name="close">Close</string>
     <string name="previous_page">Previous</string>
     <string name="next_page">Next</string>
     <string name="epub_phase_one_message">EPUB viewer engine is in progress. You can already import EPUB files, and full in-app rendering will be enabled in the next phase.</string>
