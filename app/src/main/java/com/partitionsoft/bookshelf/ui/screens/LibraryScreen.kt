@@ -289,7 +289,7 @@ private fun LibraryDocumentRow(
                         Text(
                             text = stringResource(
                                 id = R.string.continue_reading_at,
-                                document.lastLocation
+                                document.lastLocation.toReadableLocation()
                             ),
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -306,6 +306,9 @@ private fun LibraryDocumentRow(
         }
     }
 }
+
+private fun String?.toReadableLocation(): String =
+    this?.substringBefore(':')?.toIntOrNull()?.plus(1)?.toString() ?: orEmpty()
 
 @Composable
 private fun EmptyLibraryState(

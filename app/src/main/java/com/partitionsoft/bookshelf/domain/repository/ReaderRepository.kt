@@ -1,6 +1,7 @@
 package com.partitionsoft.bookshelf.domain.repository
 
 import android.net.Uri
+import com.partitionsoft.bookshelf.domain.model.ReaderBookmark
 import com.partitionsoft.bookshelf.domain.model.ReaderDocument
 import kotlinx.coroutines.flow.Flow
 
@@ -9,6 +10,8 @@ interface ReaderRepository {
 
     fun observeContinueReading(): Flow<ReaderDocument?>
 
+    fun observeBookmarks(documentId: Long): Flow<List<ReaderBookmark>>
+
     suspend fun importDocument(uri: Uri): Result<ReaderDocument>
 
     suspend fun getDocument(documentId: Long): ReaderDocument?
@@ -16,4 +19,13 @@ interface ReaderRepository {
     suspend fun updateProgress(documentId: Long, location: String)
 
     suspend fun deleteDocument(documentId: Long): Result<Unit>
+
+    suspend fun addBookmark(
+        documentId: Long,
+        chapterIndex: Int,
+        scrollY: Int,
+        title: String
+    ): Result<Unit>
+
+    suspend fun deleteBookmark(bookmarkId: Long): Result<Unit>
 }

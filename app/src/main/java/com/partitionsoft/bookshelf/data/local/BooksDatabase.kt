@@ -8,9 +8,10 @@ import androidx.room.RoomDatabase
         FavoriteBookEntity::class,
         ReaderDocumentEntity::class,
         ReaderProgressEntity::class,
+        ReaderBookmarkEntity::class,
         ReadingSessionEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class BooksDatabase : RoomDatabase() {
@@ -20,4 +21,3 @@ abstract class BooksDatabase : RoomDatabase() {
 
     abstract fun readingSessionDao(): ReadingSessionDao
 }
-

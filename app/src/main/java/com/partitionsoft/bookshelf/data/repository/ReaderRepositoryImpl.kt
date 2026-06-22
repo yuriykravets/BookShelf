@@ -5,11 +5,13 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.core.net.toUri
+import com.partitionsoft.bookshelf.data.local.ReaderBookmarkEntity
 import com.partitionsoft.bookshelf.data.local.ReaderDocumentDao
 import com.partitionsoft.bookshelf.data.local.ReaderDocumentEntity
 import com.partitionsoft.bookshelf.data.local.ReaderProgressEntity
 import com.partitionsoft.bookshelf.data.mapper.toDomain
 import com.partitionsoft.bookshelf.data.reader.ReaderFileFormatDetector
+import com.partitionsoft.bookshelf.domain.model.ReaderBookmark
 import com.partitionsoft.bookshelf.domain.model.ReaderDocument
 import com.partitionsoft.bookshelf.domain.model.ReaderDocumentFormat
 import com.partitionsoft.bookshelf.domain.repository.ReaderRepository
@@ -29,6 +31,9 @@ class ReaderRepositoryImpl @Inject constructor(
 
     override fun observeContinueReading(): Flow<ReaderDocument?> =
         readerDocumentDao.observeContinueReading().map { row -> row?.toDomain() }
+
+    override fun observeBookmarks(documentId: Long): Flow<List<ReaderBookmark>> =
+        readerDocumentDao.observeBookmarks(documentId).map { rows -> rows.map { it.toDomain() } }
 
     override suspend fun importDocument(uri: Uri): Result<ReaderDocument> = runCatching {
         val mimeType = contentResolver.getType(uri)
@@ -96,5 +101,26 @@ class ReaderRepositoryImpl @Inject constructor(
             )
         }
         readerDocumentDao.deleteDocument(documentId)
+    }
+
+    override suspend fun addBookmark(
+        documentId: Long,
+        chapterIndex: Int,
+        scrollY: Int,
+        title: String
+    ): Result<Unit> = runCatching {
+        readerDocumentDao.insertBookmark(
+            ReaderBookmarkEntity(
+                documentId = documentId,
+                chapterIndex = chapterIndex.coerceAtLeast(0),
+                scrollY = scrollY.coerceAtLeast(0),
+                title = title.ifBlank { "Bookmark" },
+                createdAtMillis = System.currentTimeMillis()
+            )
+        )
+    }
+
+    override suspend fun deleteBookmark(bookmarkId: Long): Result<Unit> = runCatching {
+        readerDocumentDao.deleteBookmark(bookmarkId)
     }
 }

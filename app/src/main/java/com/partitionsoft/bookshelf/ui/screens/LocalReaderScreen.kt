@@ -10,9 +10,11 @@ import android.os.ParcelFileDescriptor
 import android.view.GestureDetector
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
@@ -29,17 +31,23 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.Button
+import androidx.compose.material.AlertDialog
+import androidx.compose.material.Divider
 import androidx.compose.material.FloatingActionButton
 import androidx.compose.material.Icon
 import androidx.compose.material.IconButton
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Scaffold
 import androidx.compose.material.Text
+import androidx.compose.material.TextButton
 import androidx.compose.material.TopAppBar
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.NavigateBefore
+import androidx.compose.material.icons.filled.BookmarkAdd
+import androidx.compose.material.icons.filled.Bookmarks
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.runtime.Composable
@@ -75,6 +83,7 @@ import androidx.core.net.toUri
 import com.example.bookshelf.R
 import com.partitionsoft.bookshelf.data.reader.EpubParser
 import com.partitionsoft.bookshelf.data.reader.Fb2Parser
+import com.partitionsoft.bookshelf.domain.model.ReaderBookmark
 import com.partitionsoft.bookshelf.domain.model.ReaderDocument
 import com.partitionsoft.bookshelf.domain.model.ReaderDocumentFormat
 import com.partitionsoft.bookshelf.ui.LocalReaderUiState
@@ -89,6 +98,7 @@ fun LocalReaderRoute(
     viewModel: LocalReaderViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val bookmarks by viewModel.bookmarks.collectAsStateWithLifecycle()
 
     ReadingSessionLifecycleEffect(
         enabled = state is LocalReaderUiState.Ready,
@@ -153,14 +163,20 @@ fun LocalReaderRoute(
                 )
                 ReaderDocumentFormat.EPUB -> EpubPlaceholder(
                     document = uiState.document,
+                    bookmarks = bookmarks,
                     modifier = Modifier.fillMaxSize().padding(paddingValues),
                     onProgress = viewModel::updateProgress,
+                    onAddBookmark = viewModel::addBookmark,
+                    onDeleteBookmark = viewModel::deleteBookmark,
                     showControls = !isFullscreen
                 )
                 ReaderDocumentFormat.FB2 -> Fb2ReaderContent(
                     document = uiState.document,
+                    bookmarks = bookmarks,
                     modifier = Modifier.fillMaxSize().padding(paddingValues),
                     onProgress = viewModel::updateProgress,
+                    onAddBookmark = viewModel::addBookmark,
+                    onDeleteBookmark = viewModel::deleteBookmark,
                     showControls = !isFullscreen
                 )
                 ReaderDocumentFormat.UNKNOWN -> UnsupportedLocalFormat(modifier = Modifier.fillMaxSize().padding(paddingValues))
@@ -340,8 +356,11 @@ private fun PdfReaderContent(
 @Composable
 private fun EpubPlaceholder(
     document: ReaderDocument,
+    bookmarks: List<ReaderBookmark>,
     modifier: Modifier = Modifier,
     onProgress: (String) -> Unit,
+    onAddBookmark: (Int, Int, String) -> Unit,
+    onDeleteBookmark: (Long) -> Unit,
     showControls: Boolean
 ) {
     val context = LocalContext.current
@@ -350,7 +369,9 @@ private fun EpubPlaceholder(
     }
 
     val publication = publicationResult?.getOrNull()
-    var chapterIndex by remember { mutableIntStateOf(document.lastLocation?.toIntOrNull() ?: 0) }
+    var chapterIndex by remember { mutableIntStateOf(document.lastLocation.chapterIndexOrDefault()) }
+    var currentScrollY by remember { mutableIntStateOf(document.lastLocation.scrollYOrDefault()) }
+    var pendingScrollY by remember { mutableStateOf<Int?>(document.lastLocation.scrollYOrDefault()) }
     var textZoom by rememberSaveable(document.uri) { mutableIntStateOf(110) }
     val isDarkTheme = isSystemInDarkTheme()
 
@@ -358,7 +379,7 @@ private fun EpubPlaceholder(
         if (publication != null && publication.chapters.isNotEmpty()) {
             val clamped = chapterIndex.coerceIn(0, publication.chapters.lastIndex)
             if (clamped != chapterIndex) chapterIndex = clamped
-            onProgress(chapterIndex.toString())
+            onProgress(formatTextLocation(chapterIndex, currentScrollY))
         }
     }
 
@@ -417,6 +438,12 @@ private fun EpubPlaceholder(
                         settings.loadWithOverviewMode = true
                         settings.textZoom = textZoom
                         webViewClient = WebViewClient()
+                        setOnScrollChangeListener { _, _, scrollY, _, _ ->
+                            if (scrollY != currentScrollY) {
+                                currentScrollY = scrollY.coerceAtLeast(0)
+                                onProgress(formatTextLocation(chapterIndex, currentScrollY))
+                            }
+                        }
                         installHorizontalPageFlingNavigation(
                             onSwipeLeft = {
                                 chapterIndex = (chapterIndex + 1).coerceAtMost(publication.chapters.lastIndex)
@@ -441,7 +468,13 @@ private fun EpubPlaceholder(
                             "utf-8",
                             null
                         )
-                        webView.post { webView.scrollTo(0, 0) }
+                        val scrollY = pendingScrollY ?: 0
+                        pendingScrollY = null
+                        webView.post { webView.scrollTo(0, scrollY) }
+                    }
+                    pendingScrollY?.let { scrollY ->
+                        pendingScrollY = null
+                        webView.post { webView.scrollTo(0, scrollY) }
                     }
                 }
             )
@@ -454,6 +487,24 @@ private fun EpubPlaceholder(
                 onReset = { textZoom = 110 },
                 canDecrease = textZoom > 80,
                 canIncrease = textZoom < 200
+            )
+            TextBookmarkControls(
+                bookmarks = bookmarks,
+                currentChapterIndex = chapterIndex,
+                currentScrollY = currentScrollY,
+                onAddBookmark = {
+                    onAddBookmark(
+                        chapterIndex,
+                        currentScrollY,
+                        chapterTitle
+                    )
+                },
+                onOpenBookmark = { bookmark ->
+                    chapterIndex = bookmark.chapterIndex.coerceIn(0, publication.chapters.lastIndex)
+                    currentScrollY = bookmark.scrollY
+                    pendingScrollY = bookmark.scrollY
+                },
+                onDeleteBookmark = onDeleteBookmark
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -490,8 +541,11 @@ private fun EpubPlaceholder(
 @Composable
 private fun Fb2ReaderContent(
     document: ReaderDocument,
+    bookmarks: List<ReaderBookmark>,
     modifier: Modifier = Modifier,
     onProgress: (String) -> Unit,
+    onAddBookmark: (Int, Int, String) -> Unit,
+    onDeleteBookmark: (Long) -> Unit,
     showControls: Boolean
 ) {
     val context = LocalContext.current
@@ -500,7 +554,9 @@ private fun Fb2ReaderContent(
     }
 
     val publication = publicationResult?.getOrNull()
-    var chapterIndex by remember { mutableIntStateOf(document.lastLocation?.toIntOrNull() ?: 0) }
+    var chapterIndex by remember { mutableIntStateOf(document.lastLocation.chapterIndexOrDefault()) }
+    var currentScrollY by remember { mutableIntStateOf(document.lastLocation.scrollYOrDefault()) }
+    var pendingScrollY by remember { mutableStateOf<Int?>(document.lastLocation.scrollYOrDefault()) }
     var textZoom by rememberSaveable(document.uri) { mutableIntStateOf(110) }
     val isDarkTheme = isSystemInDarkTheme()
 
@@ -508,7 +564,7 @@ private fun Fb2ReaderContent(
         if (publication != null && publication.chapters.isNotEmpty()) {
             val clamped = chapterIndex.coerceIn(0, publication.chapters.lastIndex)
             if (clamped != chapterIndex) chapterIndex = clamped
-            onProgress(chapterIndex.toString())
+            onProgress(formatTextLocation(chapterIndex, currentScrollY))
         }
     }
 
@@ -567,6 +623,12 @@ private fun Fb2ReaderContent(
                         settings.loadWithOverviewMode = true
                         settings.textZoom = textZoom
                         webViewClient = WebViewClient()
+                        setOnScrollChangeListener { _, _, scrollY, _, _ ->
+                            if (scrollY != currentScrollY) {
+                                currentScrollY = scrollY.coerceAtLeast(0)
+                                onProgress(formatTextLocation(chapterIndex, currentScrollY))
+                            }
+                        }
                         installHorizontalPageFlingNavigation(
                             onSwipeLeft = {
                                 chapterIndex = (chapterIndex + 1).coerceAtMost(publication.chapters.lastIndex)
@@ -591,7 +653,13 @@ private fun Fb2ReaderContent(
                             "utf-8",
                             null
                         )
-                        webView.post { webView.scrollTo(0, 0) }
+                        val scrollY = pendingScrollY ?: 0
+                        pendingScrollY = null
+                        webView.post { webView.scrollTo(0, scrollY) }
+                    }
+                    pendingScrollY?.let { scrollY ->
+                        pendingScrollY = null
+                        webView.post { webView.scrollTo(0, scrollY) }
                     }
                 }
             )
@@ -604,6 +672,24 @@ private fun Fb2ReaderContent(
                 onReset = { textZoom = 110 },
                 canDecrease = textZoom > 80,
                 canIncrease = textZoom < 200
+            )
+            TextBookmarkControls(
+                bookmarks = bookmarks,
+                currentChapterIndex = chapterIndex,
+                currentScrollY = currentScrollY,
+                onAddBookmark = {
+                    onAddBookmark(
+                        chapterIndex,
+                        currentScrollY,
+                        chapterTitle
+                    )
+                },
+                onOpenBookmark = { bookmark ->
+                    chapterIndex = bookmark.chapterIndex.coerceIn(0, publication.chapters.lastIndex)
+                    currentScrollY = bookmark.scrollY
+                    pendingScrollY = bookmark.scrollY
+                },
+                onDeleteBookmark = onDeleteBookmark
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -634,6 +720,137 @@ private fun Fb2ReaderContent(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun TextBookmarkControls(
+    bookmarks: List<ReaderBookmark>,
+    currentChapterIndex: Int,
+    currentScrollY: Int,
+    onAddBookmark: () -> Unit,
+    onOpenBookmark: (ReaderBookmark) -> Unit,
+    onDeleteBookmark: (Long) -> Unit
+) {
+    var showBookmarks by rememberSaveable { mutableStateOf(false) }
+    val context = LocalContext.current
+    val bookmarkAddedMessage = stringResource(R.string.reader_bookmark_added)
+
+    val addBookmarkWithFeedback = {
+        onAddBookmark()
+        Toast.makeText(
+            context,
+            bookmarkAddedMessage,
+            Toast.LENGTH_SHORT
+        ).show()
+    }
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = stringResource(
+                id = R.string.reader_current_position,
+                currentChapterIndex + 1,
+                currentScrollY
+            ),
+            style = MaterialTheme.typography.caption,
+            modifier = Modifier.padding(top = 14.dp)
+        )
+        Row {
+            IconButton(onClick = addBookmarkWithFeedback) {
+                Icon(
+                    imageVector = Icons.Filled.BookmarkAdd,
+                    contentDescription = stringResource(id = R.string.reader_add_bookmark)
+                )
+            }
+            IconButton(
+                onClick = { showBookmarks = true },
+                enabled = bookmarks.isNotEmpty()
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Bookmarks,
+                    contentDescription = stringResource(id = R.string.reader_bookmarks)
+                )
+            }
+        }
+    }
+
+    if (showBookmarks) {
+        AlertDialog(
+            onDismissRequest = { showBookmarks = false },
+            title = { Text(text = stringResource(id = R.string.reader_bookmarks)) },
+            text = {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    if (bookmarks.isEmpty()) {
+                        Text(
+                            text = stringResource(id = R.string.reader_bookmarks_empty),
+                            style = MaterialTheme.typography.body2
+                        )
+                    } else {
+                        bookmarks.forEachIndexed { index, bookmark ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable {
+                                            showBookmarks = false
+                                            onOpenBookmark(bookmark)
+                                        }
+                                        .padding(vertical = 8.dp)
+                                ) {
+                                    Text(
+                                        text = bookmark.title,
+                                        style = MaterialTheme.typography.subtitle2,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = stringResource(
+                                            id = R.string.reader_bookmark_position,
+                                            bookmark.chapterIndex + 1,
+                                            bookmark.scrollY
+                                        ),
+                                        style = MaterialTheme.typography.caption,
+                                        color = MaterialTheme.colors.onSurface.copy(alpha = 0.68f)
+                                    )
+                                }
+                                IconButton(onClick = { onDeleteBookmark(bookmark.id) }) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Delete,
+                                        contentDescription = stringResource(id = R.string.reader_delete_bookmark)
+                                    )
+                                }
+                            }
+                            if (index < bookmarks.lastIndex) Divider()
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showBookmarks = false }) {
+                    Text(text = stringResource(id = R.string.close))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        addBookmarkWithFeedback()
+                        showBookmarks = false
+                    }
+                ) {
+                    Text(text = stringResource(id = R.string.reader_add_bookmark))
+                }
+            }
+        )
     }
 }
 
@@ -697,6 +914,15 @@ private fun String.looksLikeTechnicalId(): Boolean {
     val normalized = trim()
     return normalized.length >= 28 && normalized.all { it.isLetterOrDigit() || it == '-' || it == '_' }
 }
+
+private fun String?.chapterIndexOrDefault(): Int =
+    this?.substringBefore(':')?.toIntOrNull()?.coerceAtLeast(0) ?: 0
+
+private fun String?.scrollYOrDefault(): Int =
+    this?.substringAfter(':', missingDelimiterValue = "0")?.toIntOrNull()?.coerceAtLeast(0) ?: 0
+
+private fun formatTextLocation(chapterIndex: Int, scrollY: Int): String =
+    "${chapterIndex.coerceAtLeast(0)}:${scrollY.coerceAtLeast(0)}"
 
 @Composable
 private fun ZoomControls(
