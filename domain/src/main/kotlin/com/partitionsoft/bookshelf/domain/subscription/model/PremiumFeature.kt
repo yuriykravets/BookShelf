@@ -1,0 +1,14 @@
+package com.partitionsoft.bookshelf.domain.subscription.model
+
+enum class PremiumFeature {
+    ADVANCED_READER_CUSTOMIZATION,
+    UNLIMITED_HIGHLIGHTS,
+    COLORED_HIGHLIGHTS,
+    UNLIMITED_NOTES,
+    UNLIMITED_INSIGHTS,
+    KNOWLEDGE_EXPORT,
+    CLOUD_SYNC,
+    ADVANCED_READING_STATISTICS,
+    BACKUP_AND_RESTORE,
+    AI_READING_ASSISTANT
+}

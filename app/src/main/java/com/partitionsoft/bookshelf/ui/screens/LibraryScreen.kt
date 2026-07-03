@@ -1,5 +1,6 @@
 package com.partitionsoft.bookshelf.ui.screens
 
+import android.annotation.SuppressLint
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -87,6 +88,7 @@ private val supportedReaderMimeTypes = arrayOf(
     "*/*"
 )
 
+@SuppressLint("LocalContextGetResourceValueCall")
 @Composable
 fun LibraryRoute(
     onBackClicked: (() -> Unit)?,

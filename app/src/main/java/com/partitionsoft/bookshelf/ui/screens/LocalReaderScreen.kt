@@ -7,9 +7,11 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
+import android.util.Log
 import android.view.GestureDetector
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.JavascriptInterface
 import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -40,6 +42,7 @@ import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Scaffold
 import androidx.compose.material.Text
 import androidx.compose.material.TextButton
+import androidx.compose.material.OutlinedTextField
 import androidx.compose.material.TopAppBar
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -48,8 +51,10 @@ import androidx.compose.material.icons.automirrored.filled.NavigateBefore
 import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.Bookmarks
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.BorderColor
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -78,27 +83,43 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.annotation.Keep
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.net.toUri
 import com.example.bookshelf.R
 import com.partitionsoft.bookshelf.data.reader.EpubParser
 import com.partitionsoft.bookshelf.data.reader.Fb2Parser
 import com.partitionsoft.bookshelf.domain.model.ReaderBookmark
+import com.partitionsoft.bookshelf.domain.model.ReaderAnnotation
+import com.partitionsoft.bookshelf.domain.model.ReaderAnnotationType
 import com.partitionsoft.bookshelf.domain.model.ReaderDocument
 import com.partitionsoft.bookshelf.domain.model.ReaderDocumentFormat
+import com.partitionsoft.bookshelf.domain.reader.model.ReaderFontFamily
+import com.partitionsoft.bookshelf.domain.reader.model.ReaderFontWeight
+import com.partitionsoft.bookshelf.domain.reader.model.ReaderPageMargin
+import com.partitionsoft.bookshelf.domain.reader.model.ReaderSettings
+import com.partitionsoft.bookshelf.domain.reader.model.ReaderSpacing
+import com.partitionsoft.bookshelf.domain.reader.model.ReaderTheme
+import com.partitionsoft.bookshelf.domain.subscription.model.PremiumFeature
 import com.partitionsoft.bookshelf.ui.LocalReaderUiState
 import com.partitionsoft.bookshelf.ui.LocalReaderViewModel
+import com.partitionsoft.bookshelf.ui.premium.PremiumUpgradeDialog
+import com.partitionsoft.bookshelf.ui.reader.ReaderSettingsSheet
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import androidx.core.graphics.createBitmap
+import org.json.JSONObject
 
 @Composable
 fun LocalReaderRoute(
     onBackClicked: () -> Unit,
+    onPremiumRequested: () -> Unit,
     viewModel: LocalReaderViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val bookmarks by viewModel.bookmarks.collectAsStateWithLifecycle()
+    val annotations by viewModel.annotations.collectAsStateWithLifecycle()
+    val customization by viewModel.customization.collectAsStateWithLifecycle()
 
     ReadingSessionLifecycleEffect(
         enabled = state is LocalReaderUiState.Ready,
@@ -107,6 +128,8 @@ fun LocalReaderRoute(
     )
 
     var isFullscreen by rememberSaveable { mutableStateOf(false) }
+    var showReaderSettings by rememberSaveable { mutableStateOf(false) }
+    var showPremiumDialog by rememberSaveable { mutableStateOf(false) }
     val onToggleFullscreen = { isFullscreen = !isFullscreen }
 
     ReaderImmersiveEffect(isEnabled = isFullscreen)
@@ -136,6 +159,16 @@ fun LocalReaderRoute(
                         }
                     },
                     actions = {
+                        val supportsTextCustomization = (state as? LocalReaderUiState.Ready)?.document?.format in
+                            setOf(ReaderDocumentFormat.EPUB, ReaderDocumentFormat.FB2)
+                        if (supportsTextCustomization) {
+                            IconButton(onClick = { showReaderSettings = true }) {
+                                Icon(
+                                    imageVector = Icons.Filled.Tune,
+                                    contentDescription = stringResource(id = R.string.reader_settings_open)
+                                )
+                            }
+                        }
                         IconButton(onClick = onToggleFullscreen) {
                             Icon(
                                 imageVector = Icons.Filled.Fullscreen,
@@ -164,24 +197,61 @@ fun LocalReaderRoute(
                 ReaderDocumentFormat.EPUB -> EpubPlaceholder(
                     document = uiState.document,
                     bookmarks = bookmarks,
+                    annotations = annotations,
                     modifier = Modifier.fillMaxSize().padding(paddingValues),
                     onProgress = viewModel::updateProgress,
                     onAddBookmark = viewModel::addBookmark,
                     onDeleteBookmark = viewModel::deleteBookmark,
+                    onAddHighlight = viewModel::addHighlight,
+                    onAddNote = viewModel::addNote,
+                    onDeleteAnnotation = viewModel::deleteAnnotation,
+                    isPremium = customization.isPremium,
+                    onPremiumRequired = { showPremiumDialog = true },
+                    readerSettings = customization.settings,
                     showControls = !isFullscreen
                 )
                 ReaderDocumentFormat.FB2 -> Fb2ReaderContent(
                     document = uiState.document,
                     bookmarks = bookmarks,
+                    annotations = annotations,
                     modifier = Modifier.fillMaxSize().padding(paddingValues),
                     onProgress = viewModel::updateProgress,
                     onAddBookmark = viewModel::addBookmark,
                     onDeleteBookmark = viewModel::deleteBookmark,
+                    onAddHighlight = viewModel::addHighlight,
+                    onAddNote = viewModel::addNote,
+                    onDeleteAnnotation = viewModel::deleteAnnotation,
+                    isPremium = customization.isPremium,
+                    onPremiumRequired = { showPremiumDialog = true },
+                    readerSettings = customization.settings,
                     showControls = !isFullscreen
                 )
                 ReaderDocumentFormat.UNKNOWN -> UnsupportedLocalFormat(modifier = Modifier.fillMaxSize().padding(paddingValues))
             }
         }
+    }
+
+    if (showReaderSettings) {
+        ReaderSettingsSheet(
+            settings = customization.settings,
+            isPremium = customization.isPremium,
+            onSettingsChanged = viewModel::updateReaderSettings,
+            onReset = viewModel::resetReaderSettings,
+            onPremiumRequired = { showPremiumDialog = true },
+            onDismiss = { showReaderSettings = false }
+        )
+    }
+
+    if (showPremiumDialog) {
+        PremiumUpgradeDialog(
+            feature = PremiumFeature.ADVANCED_READER_CUSTOMIZATION,
+            onDismiss = { showPremiumDialog = false },
+            onViewPremium = {
+                showPremiumDialog = false
+                showReaderSettings = false
+                onPremiumRequested()
+            }
+        )
     }
 }
 
@@ -357,10 +427,17 @@ private fun PdfReaderContent(
 private fun EpubPlaceholder(
     document: ReaderDocument,
     bookmarks: List<ReaderBookmark>,
+    annotations: List<ReaderAnnotation>,
     modifier: Modifier = Modifier,
     onProgress: (String) -> Unit,
     onAddBookmark: (Int, Int, String) -> Unit,
     onDeleteBookmark: (Long) -> Unit,
+    onAddHighlight: (Int, Int, String, String) -> Unit,
+    onAddNote: (Int, Int, String, String) -> Unit,
+    onDeleteAnnotation: (Long) -> Unit,
+    isPremium: Boolean,
+    onPremiumRequired: () -> Unit,
+    readerSettings: ReaderSettings,
     showControls: Boolean
 ) {
     val context = LocalContext.current
@@ -372,8 +449,7 @@ private fun EpubPlaceholder(
     var chapterIndex by remember { mutableIntStateOf(document.lastLocation.chapterIndexOrDefault()) }
     var currentScrollY by remember { mutableIntStateOf(document.lastLocation.scrollYOrDefault()) }
     var pendingScrollY by remember { mutableStateOf<Int?>(document.lastLocation.scrollYOrDefault()) }
-    var textZoom by rememberSaveable(document.uri) { mutableIntStateOf(110) }
-    val isDarkTheme = isSystemInDarkTheme()
+    val isSystemDark = isSystemInDarkTheme()
 
     LaunchedEffect(chapterIndex, publication?.chapters?.size) {
         if (publication != null && publication.chapters.isNotEmpty()) {
@@ -388,6 +464,11 @@ private fun EpubPlaceholder(
             LoadingScreen(modifier = modifier)
             return
         }
+        publicationResult?.isFailure == true -> {
+            Log.e(READER_LOG_TAG, "Unable to open EPUB ${document.uri}", publicationResult?.exceptionOrNull())
+            UnreadableLocalFile(modifier = modifier)
+            return
+        }
         publication == null || publication.chapters.isEmpty() -> {
             UnsupportedLocalFormat(modifier = modifier)
             return
@@ -395,6 +476,7 @@ private fun EpubPlaceholder(
     }
 
     val chapter = publication.chapters[chapterIndex]
+    val chapterAnnotations = annotations.filter { isPremium && it.chapterIndex == chapterIndex }
     val bookTitle = publication.title
         .takeUnless { it.isBlank() || it.looksLikeTechnicalId() }
         ?: stringResource(id = R.string.epub_book_fallback_title)
@@ -421,23 +503,37 @@ private fun EpubPlaceholder(
                 overflow = TextOverflow.Ellipsis
             )
         }
-        key(document.uri, chapterIndex, isDarkTheme) {
+        key(document.uri, chapterIndex) {
             AndroidView(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .background(androidx.compose.ui.graphics.Color.White),
+                    .background(
+                        androidx.compose.ui.graphics.Color(
+                            Color.parseColor(readerSettings.backgroundColor(isSystemDark))
+                        )
+                    ),
                 factory = { context ->
                     WebView(context).apply {
-                        settings.javaScriptEnabled = false
+                        settings.javaScriptEnabled = true
                         settings.domStorageEnabled = false
                         settings.setSupportZoom(true)
                         settings.builtInZoomControls = true
                         settings.displayZoomControls = false
                         settings.useWideViewPort = true
                         settings.loadWithOverviewMode = true
-                        settings.textZoom = textZoom
+                        settings.textZoom = readerSettings.fontSizePercent
                         webViewClient = WebViewClient()
+                        addJavascriptInterface(
+                            ReaderAnnotationBridge(
+                                isPremium = isPremium,
+                                onHighlight = { text, color, scrollY ->
+                                    post { onAddHighlight(chapterIndex, scrollY, text, color) }
+                                },
+                                onPremiumRequired = { post(onPremiumRequired) }
+                            ),
+                            READER_ANNOTATION_BRIDGE
+                        )
                         setOnScrollChangeListener { _, _, scrollY, _, _ ->
                             if (scrollY != currentScrollY) {
                                 currentScrollY = scrollY.coerceAtLeast(0)
@@ -445,21 +541,17 @@ private fun EpubPlaceholder(
                             }
                         }
                         installHorizontalPageFlingNavigation(
-                            onSwipeLeft = {
-                                chapterIndex = (chapterIndex + 1).coerceAtMost(publication.chapters.lastIndex)
-                            },
-                            onSwipeRight = {
-                                chapterIndex = (chapterIndex - 1).coerceAtLeast(0)
-                            }
+                            onSwipeLeft = { chapterIndex = (chapterIndex + 1).coerceAtMost(publication.chapters.lastIndex) },
+                            onSwipeRight = { chapterIndex = (chapterIndex - 1).coerceAtLeast(0) }
                         )
                     }
                 },
                 update = { webView ->
-                    webView.settings.textZoom = textZoom
-                    val contentKey = "${document.uri}-${chapterIndex}-${isDarkTheme}"
-                    webView.setBackgroundColor(if (isDarkTheme) Color.parseColor("#111827") else Color.WHITE)
+                    webView.settings.textZoom = readerSettings.fontSizePercent
+                    val contentKey = "${document.uri}-${chapterIndex}-${readerSettings}-${isSystemDark}-${chapterAnnotations.annotationKey()}"
+                    webView.setBackgroundColor(Color.parseColor(readerSettings.backgroundColor(isSystemDark)))
                     if (webView.tag != contentKey) {
-                        val html = buildReadableEpubHtml(chapter.html, isDarkTheme)
+                        val html = buildReadableEpubHtml(chapter.html, readerSettings, isSystemDark, chapterAnnotations)
                         webView.tag = contentKey
                         webView.loadDataWithBaseURL(
                             "https://bookshelf.local/epub/${document.id}/$chapterIndex/",
@@ -468,7 +560,7 @@ private fun EpubPlaceholder(
                             "utf-8",
                             null
                         )
-                        val scrollY = pendingScrollY ?: 0
+                        val scrollY = pendingScrollY ?: currentScrollY
                         pendingScrollY = null
                         webView.post { webView.scrollTo(0, scrollY) }
                     }
@@ -480,14 +572,6 @@ private fun EpubPlaceholder(
             )
         }
         if (showControls) {
-            ZoomControls(
-                valueLabel = stringResource(id = R.string.reader_text_size, textZoom),
-                onDecrease = { textZoom = (textZoom - 10).coerceAtLeast(80) },
-                onIncrease = { textZoom = (textZoom + 10).coerceAtMost(200) },
-                onReset = { textZoom = 110 },
-                canDecrease = textZoom > 80,
-                canIncrease = textZoom < 200
-            )
             TextBookmarkControls(
                 bookmarks = bookmarks,
                 currentChapterIndex = chapterIndex,
@@ -505,6 +589,20 @@ private fun EpubPlaceholder(
                     pendingScrollY = bookmark.scrollY
                 },
                 onDeleteBookmark = onDeleteBookmark
+            )
+            ReaderAnnotationControls(
+                annotations = annotations,
+                currentChapterIndex = chapterIndex,
+                currentScrollY = currentScrollY,
+                isPremium = isPremium,
+                onAddNote = { note -> onAddNote(chapterIndex, currentScrollY, "", note) },
+                onOpenAnnotation = { annotation ->
+                    chapterIndex = annotation.chapterIndex.coerceIn(0, publication.chapters.lastIndex)
+                    currentScrollY = annotation.scrollY
+                    pendingScrollY = annotation.scrollY
+                },
+                onDeleteAnnotation = onDeleteAnnotation,
+                onPremiumRequired = onPremiumRequired
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -542,10 +640,17 @@ private fun EpubPlaceholder(
 private fun Fb2ReaderContent(
     document: ReaderDocument,
     bookmarks: List<ReaderBookmark>,
+    annotations: List<ReaderAnnotation>,
     modifier: Modifier = Modifier,
     onProgress: (String) -> Unit,
     onAddBookmark: (Int, Int, String) -> Unit,
     onDeleteBookmark: (Long) -> Unit,
+    onAddHighlight: (Int, Int, String, String) -> Unit,
+    onAddNote: (Int, Int, String, String) -> Unit,
+    onDeleteAnnotation: (Long) -> Unit,
+    isPremium: Boolean,
+    onPremiumRequired: () -> Unit,
+    readerSettings: ReaderSettings,
     showControls: Boolean
 ) {
     val context = LocalContext.current
@@ -557,8 +662,7 @@ private fun Fb2ReaderContent(
     var chapterIndex by remember { mutableIntStateOf(document.lastLocation.chapterIndexOrDefault()) }
     var currentScrollY by remember { mutableIntStateOf(document.lastLocation.scrollYOrDefault()) }
     var pendingScrollY by remember { mutableStateOf<Int?>(document.lastLocation.scrollYOrDefault()) }
-    var textZoom by rememberSaveable(document.uri) { mutableIntStateOf(110) }
-    val isDarkTheme = isSystemInDarkTheme()
+    val isSystemDark = isSystemInDarkTheme()
 
     LaunchedEffect(chapterIndex, publication?.chapters?.size) {
         if (publication != null && publication.chapters.isNotEmpty()) {
@@ -573,6 +677,11 @@ private fun Fb2ReaderContent(
             LoadingScreen(modifier = modifier)
             return
         }
+        publicationResult?.isFailure == true -> {
+            Log.e(READER_LOG_TAG, "Unable to open FB2 ${document.uri}", publicationResult?.exceptionOrNull())
+            UnreadableLocalFile(modifier = modifier)
+            return
+        }
         publication == null || publication.chapters.isEmpty() -> {
             UnsupportedLocalFormat(modifier = modifier)
             return
@@ -580,6 +689,7 @@ private fun Fb2ReaderContent(
     }
 
     val chapter = publication.chapters[chapterIndex]
+    val chapterAnnotations = annotations.filter { isPremium && it.chapterIndex == chapterIndex }
     val bookTitle = publication.title
         .takeUnless { it.isBlank() || it.looksLikeTechnicalId() }
         ?: stringResource(id = R.string.fb2_book_fallback_title)
@@ -606,23 +716,37 @@ private fun Fb2ReaderContent(
                 overflow = TextOverflow.Ellipsis
             )
         }
-        key(document.uri, chapterIndex, isDarkTheme) {
+        key(document.uri, chapterIndex) {
             AndroidView(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .background(androidx.compose.ui.graphics.Color.White),
+                    .background(
+                        androidx.compose.ui.graphics.Color(
+                            Color.parseColor(readerSettings.backgroundColor(isSystemDark))
+                        )
+                    ),
                 factory = { context ->
                     WebView(context).apply {
-                        settings.javaScriptEnabled = false
+                        settings.javaScriptEnabled = true
                         settings.domStorageEnabled = false
                         settings.setSupportZoom(true)
                         settings.builtInZoomControls = true
                         settings.displayZoomControls = false
                         settings.useWideViewPort = true
                         settings.loadWithOverviewMode = true
-                        settings.textZoom = textZoom
+                        settings.textZoom = readerSettings.fontSizePercent
                         webViewClient = WebViewClient()
+                        addJavascriptInterface(
+                            ReaderAnnotationBridge(
+                                isPremium = isPremium,
+                                onHighlight = { text, color, scrollY ->
+                                    post { onAddHighlight(chapterIndex, scrollY, text, color) }
+                                },
+                                onPremiumRequired = { post(onPremiumRequired) }
+                            ),
+                            READER_ANNOTATION_BRIDGE
+                        )
                         setOnScrollChangeListener { _, _, scrollY, _, _ ->
                             if (scrollY != currentScrollY) {
                                 currentScrollY = scrollY.coerceAtLeast(0)
@@ -630,21 +754,17 @@ private fun Fb2ReaderContent(
                             }
                         }
                         installHorizontalPageFlingNavigation(
-                            onSwipeLeft = {
-                                chapterIndex = (chapterIndex + 1).coerceAtMost(publication.chapters.lastIndex)
-                            },
-                            onSwipeRight = {
-                                chapterIndex = (chapterIndex - 1).coerceAtLeast(0)
-                            }
+                            onSwipeLeft = { chapterIndex = (chapterIndex + 1).coerceAtMost(publication.chapters.lastIndex) },
+                            onSwipeRight = { chapterIndex = (chapterIndex - 1).coerceAtLeast(0) }
                         )
                     }
                 },
                 update = { webView ->
-                    webView.settings.textZoom = textZoom
-                    val contentKey = "${document.uri}-${chapterIndex}-${isDarkTheme}"
-                    webView.setBackgroundColor(if (isDarkTheme) Color.parseColor("#111827") else Color.WHITE)
+                    webView.settings.textZoom = readerSettings.fontSizePercent
+                    val contentKey = "${document.uri}-${chapterIndex}-${readerSettings}-${isSystemDark}-${chapterAnnotations.annotationKey()}"
+                    webView.setBackgroundColor(Color.parseColor(readerSettings.backgroundColor(isSystemDark)))
                     if (webView.tag != contentKey) {
-                        val html = buildReadableEpubHtml(chapter.html, isDarkTheme)
+                        val html = buildReadableEpubHtml(chapter.html, readerSettings, isSystemDark, chapterAnnotations)
                         webView.tag = contentKey
                         webView.loadDataWithBaseURL(
                             "https://bookshelf.local/fb2/${document.id}/$chapterIndex/",
@@ -653,7 +773,7 @@ private fun Fb2ReaderContent(
                             "utf-8",
                             null
                         )
-                        val scrollY = pendingScrollY ?: 0
+                        val scrollY = pendingScrollY ?: currentScrollY
                         pendingScrollY = null
                         webView.post { webView.scrollTo(0, scrollY) }
                     }
@@ -665,14 +785,6 @@ private fun Fb2ReaderContent(
             )
         }
         if (showControls) {
-            ZoomControls(
-                valueLabel = stringResource(id = R.string.reader_text_size, textZoom),
-                onDecrease = { textZoom = (textZoom - 10).coerceAtLeast(80) },
-                onIncrease = { textZoom = (textZoom + 10).coerceAtMost(200) },
-                onReset = { textZoom = 110 },
-                canDecrease = textZoom > 80,
-                canIncrease = textZoom < 200
-            )
             TextBookmarkControls(
                 bookmarks = bookmarks,
                 currentChapterIndex = chapterIndex,
@@ -690,6 +802,20 @@ private fun Fb2ReaderContent(
                     pendingScrollY = bookmark.scrollY
                 },
                 onDeleteBookmark = onDeleteBookmark
+            )
+            ReaderAnnotationControls(
+                annotations = annotations,
+                currentChapterIndex = chapterIndex,
+                currentScrollY = currentScrollY,
+                isPremium = isPremium,
+                onAddNote = { note -> onAddNote(chapterIndex, currentScrollY, "", note) },
+                onOpenAnnotation = { annotation ->
+                    chapterIndex = annotation.chapterIndex.coerceIn(0, publication.chapters.lastIndex)
+                    currentScrollY = annotation.scrollY
+                    pendingScrollY = annotation.scrollY
+                },
+                onDeleteAnnotation = onDeleteAnnotation,
+                onPremiumRequired = onPremiumRequired
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -855,6 +981,115 @@ private fun TextBookmarkControls(
 }
 
 @Composable
+private fun ReaderAnnotationControls(
+    annotations: List<ReaderAnnotation>,
+    currentChapterIndex: Int,
+    currentScrollY: Int,
+    isPremium: Boolean,
+    onAddNote: (String) -> Unit,
+    onOpenAnnotation: (ReaderAnnotation) -> Unit,
+    onDeleteAnnotation: (Long) -> Unit,
+    onPremiumRequired: () -> Unit
+) {
+    var showAnnotations by rememberSaveable { mutableStateOf(false) }
+    var showAddNote by rememberSaveable { mutableStateOf(false) }
+    var noteText by rememberSaveable { mutableStateOf("") }
+
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+        IconButton(onClick = { if (isPremium) showAddNote = true else onPremiumRequired() }) {
+            Icon(Icons.Filled.BorderColor, contentDescription = stringResource(R.string.reader_add_note))
+        }
+        TextButton(onClick = { if (isPremium) showAnnotations = true else onPremiumRequired() }) {
+            Text(stringResource(R.string.reader_annotations_count, annotations.size))
+        }
+    }
+
+    if (showAddNote) {
+        AlertDialog(
+            onDismissRequest = { showAddNote = false },
+            title = { Text(stringResource(R.string.reader_add_note)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(stringResource(R.string.reader_current_position, currentChapterIndex + 1, currentScrollY))
+                    OutlinedTextField(
+                        value = noteText,
+                        onValueChange = { noteText = it },
+                        label = { Text(stringResource(R.string.reader_note_hint)) }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = noteText.isNotBlank(),
+                    onClick = {
+                        onAddNote(noteText)
+                        noteText = ""
+                        showAddNote = false
+                    }
+                ) { Text(stringResource(R.string.save)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddNote = false }) { Text(stringResource(R.string.cancel)) }
+            }
+        )
+    }
+
+    if (showAnnotations) {
+        AlertDialog(
+            onDismissRequest = { showAnnotations = false },
+            title = { Text(stringResource(R.string.reader_annotations)) },
+            text = {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (annotations.isEmpty()) {
+                        Text(stringResource(R.string.reader_annotations_empty))
+                    }
+                    annotations.forEach { annotation ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clickable {
+                                        showAnnotations = false
+                                        onOpenAnnotation(annotation)
+                                    }
+                                    .padding(vertical = 8.dp)
+                            ) {
+                                Text(
+                                    text = annotation.noteText.ifBlank { annotation.selectedText },
+                                    maxLines = 3,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    stringResource(
+                                        R.string.reader_bookmark_position,
+                                        annotation.chapterIndex + 1,
+                                        annotation.scrollY
+                                    ),
+                                    style = MaterialTheme.typography.caption
+                                )
+                            }
+                            IconButton(onClick = { onDeleteAnnotation(annotation.id) }) {
+                                Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.reader_delete_annotation))
+                            }
+                        }
+                        Divider()
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showAnnotations = false }) { Text(stringResource(R.string.close)) }
+            }
+        )
+    }
+}
+
+@Composable
 private fun UnsupportedLocalFormat(modifier: Modifier = Modifier) {
     Column(
         modifier = modifier.padding(24.dp),
@@ -862,6 +1097,19 @@ private fun UnsupportedLocalFormat(modifier: Modifier = Modifier) {
     ) {
         Text(
             text = stringResource(id = R.string.reader_unsupported_format),
+            style = MaterialTheme.typography.h6
+        )
+    }
+}
+
+@Composable
+private fun UnreadableLocalFile(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.padding(24.dp),
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = stringResource(R.string.reader_file_access_lost),
             style = MaterialTheme.typography.h6
         )
     }
@@ -1003,14 +1251,51 @@ private fun WebView.installHorizontalPageFlingNavigation(
     }
 }
 
-private fun buildReadableEpubHtml(rawHtml: String, isDarkTheme: Boolean): String {
+private fun buildReadableEpubHtml(
+    rawHtml: String,
+    settings: ReaderSettings,
+    isSystemDark: Boolean,
+    annotations: List<ReaderAnnotation>
+): String {
     val normalizedHtml = rawHtml
+        .replace(Regex("<script[^>]*>[\\s\\S]*?</script>", RegexOption.IGNORE_CASE), "")
+        .replace(Regex("\\son[a-z]+\\s*=\\s*(['\"]).*?\\1", RegexOption.IGNORE_CASE), "")
+        .replace(Regex("javascript:", RegexOption.IGNORE_CASE), "")
         .replace(Regex("(<br\\s*/?>\\s*){3,}", RegexOption.IGNORE_CASE), "<br><br>")
         .replace(Regex("<p>\\s*</p>", RegexOption.IGNORE_CASE), "")
 
-    val bg = if (isDarkTheme) "#0F172A" else "#FFFFFF"
-    val fg = if (isDarkTheme) "#E5E7EB" else "#111827"
-    val muted = if (isDarkTheme) "#94A3B8" else "#4B5563"
+    val colors = settings.readerColors(isSystemDark)
+    val fontFamily = when (settings.fontFamily) {
+        ReaderFontFamily.SYSTEM -> "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+        ReaderFontFamily.SERIF -> "Georgia, 'Times New Roman', serif"
+        ReaderFontFamily.SANS_SERIF -> "Arial, Helvetica, sans-serif"
+        ReaderFontFamily.MONOSPACE -> "'Courier New', monospace"
+    }
+    val fontWeight = when (settings.fontWeight) {
+        ReaderFontWeight.NORMAL -> 400
+        ReaderFontWeight.MEDIUM -> 500
+        ReaderFontWeight.BOLD -> 700
+    }
+    val lineHeight = when (settings.lineSpacing) {
+        ReaderSpacing.COMPACT -> 1.35
+        ReaderSpacing.NORMAL -> 1.6
+        ReaderSpacing.RELAXED -> 1.85
+    }
+    val paragraphSpacing = when (settings.paragraphSpacing) {
+        ReaderSpacing.COMPACT -> 0.55
+        ReaderSpacing.NORMAL -> 0.95
+        ReaderSpacing.RELAXED -> 1.4
+    }
+    val horizontalPadding = when (settings.pageMargin) {
+        ReaderPageMargin.NARROW -> 8
+        ReaderPageMargin.NORMAL -> 14
+        ReaderPageMargin.WIDE -> 32
+    }
+    val highlightsJson = annotations
+        .filter { it.type == ReaderAnnotationType.HIGHLIGHT && it.selectedText.isNotBlank() }
+        .joinToString(prefix = "[", postfix = "]") { annotation ->
+            "{text:${JSONObject.quote(annotation.selectedText)},color:${JSONObject.quote(annotation.colorHex)}}"
+        }
 
     return """
         <!doctype html>
@@ -1022,53 +1307,180 @@ private fun buildReadableEpubHtml(rawHtml: String, isDarkTheme: Boolean): String
                 html, body {
                     margin: 0;
                     padding: 0;
-                    background: $bg !important;
-                    color: $fg !important;
+                    background: ${colors.background} !important;
+                    color: ${colors.foreground} !important;
                     font-size: 1rem;
-                    line-height: 1.6;
-                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                    line-height: $lineHeight;
+                    font-family: $fontFamily;
+                    font-weight: $fontWeight;
                     word-break: break-word;
                 }
                 body {
                     max-width: 760px;
                     margin: 0 auto;
-                    padding: 16px 14px 24px 14px;
+                    padding: 16px ${horizontalPadding}px 24px ${horizontalPadding}px;
                 }
                 * {
                     max-width: 100% !important;
                 }
                 p {
-                    margin: 0 0 0.95em 0;
+                    margin: 0 0 ${paragraphSpacing}em 0;
                     text-align: start;
-                    color: $fg !important;
+                    color: ${colors.foreground} !important;
                 }
                 h1, h2, h3, h4, h5, h6 {
                     margin: 0 0 0.55em 0;
                     line-height: 1.3;
-                    color: $fg !important;
+                    color: ${colors.foreground} !important;
                 }
                 blockquote {
                     margin: 0 0 1em 0;
                     padding-left: 12px;
-                    border-left: 3px solid $muted;
-                    color: $muted !important;
+                    border-left: 3px solid ${colors.muted};
+                    color: ${colors.muted} !important;
                 }
                 img, svg {
                     max-width: 100% !important;
                     height: auto !important;
                 }
                 a {
-                    color: $muted !important;
+                    color: ${colors.muted} !important;
                 }
                 pre, code {
                     white-space: pre-wrap;
-                    color: $fg !important;
+                    color: ${colors.foreground} !important;
                 }
+                #inkwell-highlight-tools {
+                    position: fixed;
+                    left: 50%;
+                    bottom: 18px;
+                    transform: translateX(-50%);
+                    display: none;
+                    gap: 10px;
+                    padding: 10px 14px;
+                    border-radius: 24px;
+                    background: rgba(24, 24, 27, 0.94);
+                    box-shadow: 0 4px 18px rgba(0,0,0,.3);
+                    z-index: 2147483647;
+                }
+                #inkwell-highlight-tools button {
+                    width: 30px;
+                    height: 30px;
+                    border: 2px solid white;
+                    border-radius: 50%;
+                }
+                mark.inkwell-highlight { color: inherit; border-radius: 3px; padding: 0 1px; }
             </style>
         </head>
         <body>
             $normalizedHtml
+            <div id="inkwell-highlight-tools">
+                <button data-color="#FFF59D" style="background:#FFF59D"></button>
+                <button data-color="#A5D6A7" style="background:#A5D6A7"></button>
+                <button data-color="#90CAF9" style="background:#90CAF9"></button>
+                <button data-color="#F8BBD0" style="background:#F8BBD0"></button>
+            </div>
+            <script>
+                (() => {
+                    const savedHighlights = $highlightsJson;
+                    const tools = document.getElementById('inkwell-highlight-tools');
+                    let selectedText = '';
+
+                    function applyHighlight(text, color) {
+                        if (!text) return;
+                        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+                        const nodes = [];
+                        let combined = '';
+                        while (walker.nextNode()) {
+                            const node = walker.currentNode;
+                            if (!node.parentElement || node.parentElement.closest('#inkwell-highlight-tools, mark')) continue;
+                            nodes.push({ node, start: combined.length, end: combined.length + node.nodeValue.length });
+                            combined += node.nodeValue;
+                        }
+                        const index = combined.indexOf(text);
+                        if (index < 0) return;
+                        const endIndex = index + text.length;
+                        const startNode = nodes.find(item => index >= item.start && index < item.end);
+                        const endNode = nodes.find(item => endIndex > item.start && endIndex <= item.end);
+                        if (!startNode || !endNode) return;
+                        const range = document.createRange();
+                        range.setStart(startNode.node, index - startNode.start);
+                        range.setEnd(endNode.node, endIndex - endNode.start);
+                        const mark = document.createElement('mark');
+                        mark.className = 'inkwell-highlight';
+                        mark.style.backgroundColor = color;
+                        mark.appendChild(range.extractContents());
+                        range.insertNode(mark);
+                    }
+
+                    savedHighlights.forEach(item => applyHighlight(item.text, item.color));
+
+                    function updateTools() {
+                        const selection = window.getSelection();
+                        selectedText = selection ? selection.toString().trim() : '';
+                        tools.style.display = selectedText ? 'flex' : 'none';
+                    }
+                    document.addEventListener('selectionchange', updateTools);
+                    document.addEventListener('touchend', () => setTimeout(updateTools, 50));
+                    tools.querySelectorAll('button').forEach(button => {
+                        button.addEventListener('click', () => {
+                            if (selectedText && window.$READER_ANNOTATION_BRIDGE) {
+                                window.$READER_ANNOTATION_BRIDGE.addHighlight(
+                                    selectedText,
+                                    button.dataset.color,
+                                    Math.max(0, Math.round(window.scrollY))
+                                );
+                            }
+                            window.getSelection().removeAllRanges();
+                            tools.style.display = 'none';
+                        });
+                    });
+                })();
+            </script>
         </body>
         </html>
     """.trimIndent()
 }
+
+@Keep
+private class ReaderAnnotationBridge(
+    private val isPremium: Boolean,
+    private val onHighlight: (String, String, Int) -> Unit,
+    private val onPremiumRequired: () -> Unit
+) {
+    @JavascriptInterface
+    fun addHighlight(text: String, color: String, scrollY: Int) {
+        if (!isPremium) {
+            onPremiumRequired()
+            return
+        }
+        val safeColor = color.takeIf { it in READER_HIGHLIGHT_COLORS } ?: READER_HIGHLIGHT_COLORS.first()
+        onHighlight(text.trim().take(2_000), safeColor, scrollY.coerceAtLeast(0))
+    }
+}
+
+private fun List<ReaderAnnotation>.annotationKey(): String =
+    joinToString(separator = ":") { "${it.id}-${it.colorHex}" }
+
+private data class ReaderHtmlColors(
+    val background: String,
+    val foreground: String,
+    val muted: String
+)
+
+private fun ReaderSettings.readerColors(isSystemDark: Boolean): ReaderHtmlColors = when (theme) {
+    ReaderTheme.SYSTEM -> if (isSystemDark) DARK_READER_COLORS else LIGHT_READER_COLORS
+    ReaderTheme.LIGHT -> LIGHT_READER_COLORS
+    ReaderTheme.DARK -> DARK_READER_COLORS
+    ReaderTheme.SEPIA -> ReaderHtmlColors("#F4ECD8", "#4A3B2A", "#78664F")
+    ReaderTheme.AMOLED -> ReaderHtmlColors("#000000", "#F5F5F5", "#A3A3A3")
+}
+
+private fun ReaderSettings.backgroundColor(isSystemDark: Boolean): String =
+    readerColors(isSystemDark).background
+
+private val LIGHT_READER_COLORS = ReaderHtmlColors("#FFFFFF", "#111827", "#4B5563")
+private val DARK_READER_COLORS = ReaderHtmlColors("#0F172A", "#E5E7EB", "#94A3B8")
+private const val READER_ANNOTATION_BRIDGE = "InkwellAnnotations"
+private val READER_HIGHLIGHT_COLORS = setOf("#FFF59D", "#A5D6A7", "#90CAF9", "#F8BBD0")
+private const val READER_LOG_TAG = "InkwellReader"

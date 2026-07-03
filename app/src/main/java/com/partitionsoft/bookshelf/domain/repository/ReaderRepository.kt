@@ -2,6 +2,8 @@ package com.partitionsoft.bookshelf.domain.repository
 
 import android.net.Uri
 import com.partitionsoft.bookshelf.domain.model.ReaderBookmark
+import com.partitionsoft.bookshelf.domain.model.ReaderAnnotation
+import com.partitionsoft.bookshelf.domain.model.ReaderAnnotationType
 import com.partitionsoft.bookshelf.domain.model.ReaderDocument
 import kotlinx.coroutines.flow.Flow
 
@@ -11,6 +13,7 @@ interface ReaderRepository {
     fun observeContinueReading(): Flow<ReaderDocument?>
 
     fun observeBookmarks(documentId: Long): Flow<List<ReaderBookmark>>
+    fun observeAnnotations(documentId: Long): Flow<List<ReaderAnnotation>>
 
     suspend fun importDocument(uri: Uri): Result<ReaderDocument>
 
@@ -28,4 +31,16 @@ interface ReaderRepository {
     ): Result<Unit>
 
     suspend fun deleteBookmark(bookmarkId: Long): Result<Unit>
+
+    suspend fun addAnnotation(
+        documentId: Long,
+        chapterIndex: Int,
+        scrollY: Int,
+        type: ReaderAnnotationType,
+        selectedText: String,
+        noteText: String,
+        colorHex: String
+    ): Result<Unit>
+
+    suspend fun deleteAnnotation(annotationId: Long): Result<Unit>
 }

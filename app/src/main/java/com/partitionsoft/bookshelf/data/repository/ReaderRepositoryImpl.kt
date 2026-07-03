@@ -6,12 +6,15 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.core.net.toUri
 import com.partitionsoft.bookshelf.data.local.ReaderBookmarkEntity
+import com.partitionsoft.bookshelf.data.local.ReaderAnnotationEntity
 import com.partitionsoft.bookshelf.data.local.ReaderDocumentDao
 import com.partitionsoft.bookshelf.data.local.ReaderDocumentEntity
 import com.partitionsoft.bookshelf.data.local.ReaderProgressEntity
 import com.partitionsoft.bookshelf.data.mapper.toDomain
 import com.partitionsoft.bookshelf.data.reader.ReaderFileFormatDetector
 import com.partitionsoft.bookshelf.domain.model.ReaderBookmark
+import com.partitionsoft.bookshelf.domain.model.ReaderAnnotation
+import com.partitionsoft.bookshelf.domain.model.ReaderAnnotationType
 import com.partitionsoft.bookshelf.domain.model.ReaderDocument
 import com.partitionsoft.bookshelf.domain.model.ReaderDocumentFormat
 import com.partitionsoft.bookshelf.domain.repository.ReaderRepository
@@ -34,6 +37,23 @@ class ReaderRepositoryImpl @Inject constructor(
 
     override fun observeBookmarks(documentId: Long): Flow<List<ReaderBookmark>> =
         readerDocumentDao.observeBookmarks(documentId).map { rows -> rows.map { it.toDomain() } }
+
+    override fun observeAnnotations(documentId: Long): Flow<List<ReaderAnnotation>> =
+        readerDocumentDao.observeAnnotations(documentId).map { rows ->
+            rows.map { row ->
+                ReaderAnnotation(
+                    id = row.id,
+                    documentId = row.documentId,
+                    chapterIndex = row.chapterIndex,
+                    scrollY = row.scrollY,
+                    type = ReaderAnnotationType.valueOf(row.type),
+                    selectedText = row.selectedText,
+                    noteText = row.noteText,
+                    colorHex = row.colorHex,
+                    createdAtMillis = row.createdAtMillis
+                )
+            }
+        }
 
     override suspend fun importDocument(uri: Uri): Result<ReaderDocument> = runCatching {
         val mimeType = contentResolver.getType(uri)
@@ -122,5 +142,32 @@ class ReaderRepositoryImpl @Inject constructor(
 
     override suspend fun deleteBookmark(bookmarkId: Long): Result<Unit> = runCatching {
         readerDocumentDao.deleteBookmark(bookmarkId)
+    }
+
+    override suspend fun addAnnotation(
+        documentId: Long,
+        chapterIndex: Int,
+        scrollY: Int,
+        type: ReaderAnnotationType,
+        selectedText: String,
+        noteText: String,
+        colorHex: String
+    ): Result<Unit> = runCatching {
+        readerDocumentDao.insertAnnotation(
+            ReaderAnnotationEntity(
+                documentId = documentId,
+                chapterIndex = chapterIndex.coerceAtLeast(0),
+                scrollY = scrollY.coerceAtLeast(0),
+                type = type.name,
+                selectedText = selectedText.trim(),
+                noteText = noteText.trim(),
+                colorHex = colorHex,
+                createdAtMillis = System.currentTimeMillis()
+            )
+        )
+    }
+
+    override suspend fun deleteAnnotation(annotationId: Long): Result<Unit> = runCatching {
+        readerDocumentDao.deleteAnnotation(annotationId)
     }
 }

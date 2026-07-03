@@ -9,9 +9,10 @@ import androidx.room.RoomDatabase
         ReaderDocumentEntity::class,
         ReaderProgressEntity::class,
         ReaderBookmarkEntity::class,
+        ReaderAnnotationEntity::class,
         ReadingSessionEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class BooksDatabase : RoomDatabase() {
