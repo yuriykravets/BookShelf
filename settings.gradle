@@ -14,3 +14,5 @@ dependencyResolutionManagement {
 }
 rootProject.name = "BookShelf"
 include ':app'
+include ':domain'
+include ':data'

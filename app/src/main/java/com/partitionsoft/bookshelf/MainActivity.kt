@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
 import com.partitionsoft.bookshelf.domain.repository.BookRepository
+import com.partitionsoft.bookshelf.domain.subscription.usecase.RefreshSubscriptionPlansUseCase
 import com.partitionsoft.bookshelf.ui.BooksApp
 import com.partitionsoft.bookshelf.ui.theme.BookShelfTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -18,6 +19,9 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var bookRepository: BookRepository
+
+    @Inject
+    lateinit var refreshSubscriptionPlans: RefreshSubscriptionPlansUseCase
 
     override fun onCreate(savedInstanceState: Bundle?) {
         var keepSplashOnScreen = true
@@ -38,6 +42,11 @@ class MainActivity : ComponentActivity() {
                 BooksApp()
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        refreshSubscriptionPlans()
     }
 
     private companion object {

@@ -15,7 +15,8 @@ fun MainAppBar(
     onCloseClicked: () -> Unit,
     onSearchClicked: (String) -> Unit,
     onSearchTriggered: () -> Unit,
-    onFavoritesClicked: () -> Unit
+    onFavoritesClicked: () -> Unit,
+    onPremiumClicked: () -> Unit
 ) {
     AnimatedContent(
         targetState = searchWidgetState,
@@ -26,7 +27,8 @@ fun MainAppBar(
             BooksViewModel.SearchWidgetState.CLOSED -> {
                 ClosedAppBar(
                     onSearchClicked = onSearchTriggered,
-                    onFavoritesClicked = onFavoritesClicked
+                    onFavoritesClicked = onFavoritesClicked,
+                    onPremiumClicked = onPremiumClicked
                 )
             }
 

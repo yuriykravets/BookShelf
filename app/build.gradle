@@ -13,8 +13,8 @@ android {
         applicationId 'com.partitionsoft.bookshelf'
         minSdk 24
         targetSdk 35
-        versionCode 18
-        versionName "2.3.0"
+        versionCode 27
+        versionName "2.3.9"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -27,6 +27,7 @@ android {
         }
 
         buildConfigField "String", "BOOKS_API_KEY", "\"${localProperties['BOOKS_API_KEY'] ?: ''}\""
+        buildConfigField "String", "PREMIUM_PRODUCT_ID", "\"${localProperties['PREMIUM_PRODUCT_ID'] ?: 'inkwell_premium'}\""
     }
 
     buildTypes {
@@ -51,6 +52,9 @@ android {
 }
 
 dependencies {
+    implementation project(':domain')
+    implementation project(':data')
+
     // Core
     implementation 'androidx.core:core-ktx:1.15.0'
     implementation 'androidx.core:core-splashscreen:1.0.1'
@@ -78,6 +82,7 @@ dependencies {
     implementation 'androidx.paging:paging-compose:3.3.6'
     implementation 'androidx.room:room-runtime:2.7.1'
     implementation 'androidx.room:room-ktx:2.7.1'
+    implementation 'androidx.datastore:datastore-preferences:1.1.7'
     ksp 'androidx.room:room-compiler:2.7.1'
 
     // Retrofit

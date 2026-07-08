@@ -1,0 +1,6 @@
+What’s new in this release:
+- Reading stats with streaks and a weekly progress chart
+- Library smart filters (All, In progress, Unread, PDF, EPUB, FB2)
+- Milestones in the library with new badge visuals and animation
+- UI polish and stability improvements
+

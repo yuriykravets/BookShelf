@@ -11,6 +11,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -34,7 +35,8 @@ import com.example.bookshelf.R
 @Composable
 fun ClosedAppBar(
     onSearchClicked: () -> Unit,
-    onFavoritesClicked: () -> Unit
+    onFavoritesClicked: () -> Unit,
+    onPremiumClicked: () -> Unit
 ) {
     TopAppBar(
         colors = TopAppBarDefaults.topAppBarColors(
@@ -45,6 +47,12 @@ fun ClosedAppBar(
         ),
         title = { Text(text = stringResource(id = R.string.app_name)) },
         actions = {
+            IconButton(onClick = onPremiumClicked) {
+                Icon(
+                    imageVector = Icons.Filled.WorkspacePremium,
+                    contentDescription = stringResource(id = R.string.premium_action)
+                )
+            }
             IconButton(onClick = onFavoritesClicked) {
                 Icon(
                     imageVector = Icons.Filled.Favorite,
