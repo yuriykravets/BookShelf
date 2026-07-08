@@ -40,6 +40,15 @@ interface ReaderDocumentDao {
     )
     fun observeBookmarks(documentId: Long): Flow<List<ReaderBookmarkEntity>>
 
+    @Query(
+        """
+        SELECT * FROM reader_annotations
+        WHERE documentId = :documentId
+        ORDER BY chapterIndex ASC, scrollY ASC, createdAtMillis DESC
+        """
+    )
+    fun observeAnnotations(documentId: Long): Flow<List<ReaderAnnotationEntity>>
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertDocument(document: ReaderDocumentEntity): Long
 
@@ -61,11 +70,20 @@ interface ReaderDocumentDao {
     @Query("DELETE FROM reader_bookmarks WHERE id = :bookmarkId")
     suspend fun deleteBookmark(bookmarkId: Long)
 
+    @Insert
+    suspend fun insertAnnotation(annotation: ReaderAnnotationEntity): Long
+
+    @Query("DELETE FROM reader_annotations WHERE id = :annotationId")
+    suspend fun deleteAnnotation(annotationId: Long)
+
     @Query("DELETE FROM reader_progress WHERE documentId = :documentId")
     suspend fun deleteProgress(documentId: Long)
 
     @Query("DELETE FROM reader_bookmarks WHERE documentId = :documentId")
     suspend fun deleteBookmarks(documentId: Long)
+
+    @Query("DELETE FROM reader_annotations WHERE documentId = :documentId")
+    suspend fun deleteAnnotations(documentId: Long)
 
     @Query("DELETE FROM reader_documents WHERE id = :documentId")
     suspend fun deleteDocumentRow(documentId: Long)
@@ -74,6 +92,7 @@ interface ReaderDocumentDao {
     suspend fun deleteDocument(documentId: Long) {
         deleteProgress(documentId)
         deleteBookmarks(documentId)
+        deleteAnnotations(documentId)
         deleteDocumentRow(documentId)
     }
 }

@@ -50,6 +50,7 @@ import com.example.bookshelf.R
 import com.partitionsoft.bookshelf.domain.model.Book
 import com.partitionsoft.bookshelf.domain.model.BookCategory
 import com.partitionsoft.bookshelf.ui.navigation.BooksDestinations
+import com.partitionsoft.bookshelf.ui.premium.PremiumRoute
 import com.partitionsoft.bookshelf.ui.screens.BookDetailsRoute
 import com.partitionsoft.bookshelf.ui.screens.BrowseBooksRoute
 import com.partitionsoft.bookshelf.ui.screens.FavoritesRoute
@@ -155,8 +156,15 @@ fun BooksApp(
                 },
                 onStreakClicked = {
                     navController.navigate(BooksDestinations.STATS_ROUTE)
+                },
+                onPremiumClicked = {
+                    navController.navigate(BooksDestinations.PREMIUM_ROUTE)
                 }
             )
+        }
+
+        composable(route = BooksDestinations.PREMIUM_ROUTE) {
+            PremiumRoute(onBackClicked = navController::navigateUp)
         }
 
         composable(route = BooksDestinations.AI_ASSISTANT_ROUTE) {
@@ -262,7 +270,12 @@ fun BooksApp(
             route = BooksDestinations.LOCAL_READER_ROUTE,
             arguments = listOf(navArgument(BooksDestinations.DOCUMENT_ID_ARG) { type = NavType.LongType })
         ) {
-            LocalReaderRoute(onBackClicked = navController::navigateUp)
+            LocalReaderRoute(
+                onBackClicked = navController::navigateUp,
+                onPremiumRequested = {
+                    navController.navigate(BooksDestinations.PREMIUM_ROUTE)
+                }
+            )
         }
         }
     }
@@ -275,7 +288,8 @@ private fun HomeRoute(
     onFavoritesClicked: () -> Unit,
     onAiAssistantClicked: () -> Unit,
     onContinueReadingClicked: (Long) -> Unit,
-    onStreakClicked: () -> Unit
+    onStreakClicked: () -> Unit,
+    onPremiumClicked: () -> Unit
 ) {
     val booksViewModel: BooksViewModel = hiltViewModel()
 
@@ -333,6 +347,7 @@ private fun HomeRoute(
         onBrowseRequested = onBrowseRequested,
         onContinueReadingClicked = onContinueReadingClicked,
         onStreakClicked = onStreakClicked,
+        onPremiumClicked = onPremiumClicked,
         shouldPlayAiFabIntro = shouldPlayAiFabIntro,
         onAiFabIntroFinished = { shouldPlayAiFabIntro = false }
     )
@@ -362,6 +377,7 @@ private fun BooksAppContent(
     onBrowseRequested: (title: String, query: String, orderBy: String?, filter: String?) -> Unit,
     onContinueReadingClicked: (Long) -> Unit,
     onStreakClicked: () -> Unit,
+    onPremiumClicked: () -> Unit,
     shouldPlayAiFabIntro: Boolean,
     onAiFabIntroFinished: () -> Unit
 ) {
@@ -396,7 +412,8 @@ private fun BooksAppContent(
                 onCloseClicked = onCloseClicked,
                 onSearchClicked = onSearchClicked,
                 onSearchTriggered = onSearchTriggered,
-                onFavoritesClicked = onFavoritesClicked
+                onFavoritesClicked = onFavoritesClicked,
+                onPremiumClicked = onPremiumClicked
             )
         }
     ) { paddingValues ->
@@ -500,6 +517,7 @@ private fun BooksAppContentPreview() {
         onBrowseRequested = { _, _, _, _ -> },
         onContinueReadingClicked = {},
         onStreakClicked = {},
+        onPremiumClicked = {},
         shouldPlayAiFabIntro = false,
         onAiFabIntroFinished = {}
     )
@@ -510,5 +528,3 @@ private data class TopLevelDestination(
     val icon: androidx.compose.ui.graphics.vector.ImageVector,
     val labelRes: Int
 )
-
-

@@ -8,6 +8,7 @@ object BooksDestinations {
     const val FAVORITES_ROUTE = "favorites"
     const val STATS_ROUTE = "stats"
     const val AI_ASSISTANT_ROUTE = "ai_assistant"
+    const val PREMIUM_ROUTE = "premium"
     const val DETAILS_ROUTE = "details/{bookId}"
     const val READER_ROUTE = "reader/{bookId}"
     const val LOCAL_READER_ROUTE = "reader/local/{documentId}"
