@@ -50,6 +50,7 @@ class ReaderRepositoryImpl @Inject constructor(
                     selectedText = row.selectedText,
                     noteText = row.noteText,
                     colorHex = row.colorHex,
+                    anchor = row.anchor,
                     createdAtMillis = row.createdAtMillis
                 )
             }
@@ -151,7 +152,8 @@ class ReaderRepositoryImpl @Inject constructor(
         type: ReaderAnnotationType,
         selectedText: String,
         noteText: String,
-        colorHex: String
+        colorHex: String,
+        anchor: String?
     ): Result<Unit> = runCatching {
         readerDocumentDao.insertAnnotation(
             ReaderAnnotationEntity(
@@ -162,6 +164,7 @@ class ReaderRepositoryImpl @Inject constructor(
                 selectedText = selectedText.trim(),
                 noteText = noteText.trim(),
                 colorHex = colorHex,
+                anchor = anchor,
                 createdAtMillis = System.currentTimeMillis()
             )
         )

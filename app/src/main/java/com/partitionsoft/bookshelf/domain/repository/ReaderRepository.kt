@@ -39,7 +39,8 @@ interface ReaderRepository {
         type: ReaderAnnotationType,
         selectedText: String,
         noteText: String,
-        colorHex: String
+        colorHex: String,
+        anchor: String? = null
     ): Result<Unit>
 
     suspend fun deleteAnnotation(annotationId: Long): Result<Unit>
