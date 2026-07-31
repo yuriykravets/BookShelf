@@ -27,7 +27,7 @@ object DatabaseModule {
             BooksDatabase::class.java,
             "bookshelf.db"
         )
-            .addMigrations(MIGRATION_4_5)
+            .addMigrations(MIGRATION_4_5, MIGRATION_5_6)
             .fallbackToDestructiveMigration()
             .build()
 
@@ -67,6 +67,12 @@ object DatabaseModule {
                 "CREATE INDEX IF NOT EXISTS `index_reader_annotations_documentId_chapterIndex_scrollY` " +
                     "ON `reader_annotations` (`documentId`, `chapterIndex`, `scrollY`)"
             )
+        }
+    }
+
+    private val MIGRATION_5_6 = object : Migration(5, 6) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `reader_annotations` ADD COLUMN `anchor` TEXT")
         }
     }
 }

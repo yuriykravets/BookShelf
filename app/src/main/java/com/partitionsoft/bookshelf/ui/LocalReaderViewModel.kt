@@ -127,13 +127,13 @@ class LocalReaderViewModel @Inject constructor(
         }
     }
 
-    fun addHighlight(chapterIndex: Int, scrollY: Int, selectedText: String, colorHex: String) {
+    fun addHighlight(chapterIndex: Int, scrollY: Int, selectedText: String, colorHex: String, anchor: String? = null) {
         if (!customization.value.isPremium || selectedText.isBlank()) return
         viewModelScope.launch {
             val safeDocumentId = documentId ?: return@launch
             readerRepository.addAnnotation(
                 safeDocumentId, chapterIndex, scrollY, ReaderAnnotationType.HIGHLIGHT,
-                selectedText.take(MAX_SELECTED_TEXT_LENGTH), "", colorHex
+                selectedText.take(MAX_SELECTED_TEXT_LENGTH), "", colorHex, anchor
             )
         }
     }

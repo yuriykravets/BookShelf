@@ -432,7 +432,7 @@ private fun EpubPlaceholder(
     onProgress: (String) -> Unit,
     onAddBookmark: (Int, Int, String) -> Unit,
     onDeleteBookmark: (Long) -> Unit,
-    onAddHighlight: (Int, Int, String, String) -> Unit,
+    onAddHighlight: (Int, Int, String, String, String?) -> Unit,
     onAddNote: (Int, Int, String, String) -> Unit,
     onDeleteAnnotation: (Long) -> Unit,
     isPremium: Boolean,
@@ -449,6 +449,7 @@ private fun EpubPlaceholder(
     var chapterIndex by remember { mutableIntStateOf(document.lastLocation.chapterIndexOrDefault()) }
     var currentScrollY by remember { mutableIntStateOf(document.lastLocation.scrollYOrDefault()) }
     var pendingScrollY by remember { mutableStateOf<Int?>(document.lastLocation.scrollYOrDefault()) }
+    var pendingAnnotationId by remember { mutableStateOf<Long?>(null) }
     val isSystemDark = isSystemInDarkTheme()
 
     LaunchedEffect(chapterIndex, publication?.chapters?.size) {
@@ -527,19 +528,22 @@ private fun EpubPlaceholder(
                         addJavascriptInterface(
                             ReaderAnnotationBridge(
                                 isPremium = isPremium,
-                                onHighlight = { text, color, scrollY ->
-                                    post { onAddHighlight(chapterIndex, scrollY, text, color) }
+                                onHighlight = { text, color, scrollY, anchor ->
+                                    post { onAddHighlight(chapterIndex, scrollY, text, color, anchor) }
+                                },
+                                onScroll = { scrollY ->
+                                    post {
+                                        val safeScrollY = scrollY.coerceAtLeast(0)
+                                        if (safeScrollY != currentScrollY) {
+                                            currentScrollY = safeScrollY
+                                            onProgress(formatTextLocation(chapterIndex, currentScrollY))
+                                        }
+                                    }
                                 },
                                 onPremiumRequired = { post(onPremiumRequired) }
                             ),
                             READER_ANNOTATION_BRIDGE
                         )
-                        setOnScrollChangeListener { _, _, scrollY, _, _ ->
-                            if (scrollY != currentScrollY) {
-                                currentScrollY = scrollY.coerceAtLeast(0)
-                                onProgress(formatTextLocation(chapterIndex, currentScrollY))
-                            }
-                        }
                         installHorizontalPageFlingNavigation(
                             onSwipeLeft = { chapterIndex = (chapterIndex + 1).coerceAtMost(publication.chapters.lastIndex) },
                             onSwipeRight = { chapterIndex = (chapterIndex - 1).coerceAtLeast(0) }
@@ -550,9 +554,15 @@ private fun EpubPlaceholder(
                     webView.settings.textZoom = readerSettings.fontSizePercent
                     val contentKey = "${document.uri}-${chapterIndex}-${readerSettings}-${isSystemDark}-${chapterAnnotations.annotationKey()}"
                     webView.setBackgroundColor(Color.parseColor(readerSettings.backgroundColor(isSystemDark)))
-                    if (webView.tag != contentKey) {
+                    val webViewState = webView.tag as? ReaderWebViewState
+                    if (webViewState?.contentKey != contentKey) {
                         val html = buildReadableEpubHtml(chapter.html, readerSettings, isSystemDark, chapterAnnotations)
-                        webView.tag = contentKey
+                        val scrollY = (pendingScrollY ?: currentScrollY).coerceAtLeast(0)
+                        val annotationId = pendingAnnotationId
+                        pendingScrollY = null
+                        pendingAnnotationId = null
+                        webView.webViewClient = RestoringScrollWebViewClient(contentKey)
+                        webView.tag = ReaderWebViewState(contentKey, scrollY, annotationId)
                         webView.loadDataWithBaseURL(
                             "https://bookshelf.local/epub/${document.id}/$chapterIndex/",
                             html,
@@ -560,16 +570,17 @@ private fun EpubPlaceholder(
                             "utf-8",
                             null
                         )
-                        val scrollY = pendingScrollY ?: currentScrollY
+                    } else {
+                        val annotationId = pendingAnnotationId
+                        val scrollY = pendingScrollY
+                        pendingAnnotationId = null
                         pendingScrollY = null
-                        webView.post { webView.scrollTo(0, scrollY) }
+                        when {
+                            annotationId != null -> webView.restoreReaderAnnotation(annotationId)
+                            scrollY != null -> webView.restoreReaderScroll(scrollY)
+                        }
                     }
-                    pendingScrollY?.let { scrollY ->
-                        pendingScrollY = null
-                        webView.post { webView.scrollTo(0, scrollY) }
-                    }
-                }
-            )
+                })
         }
         if (showControls) {
             TextBookmarkControls(
@@ -600,6 +611,7 @@ private fun EpubPlaceholder(
                     chapterIndex = annotation.chapterIndex.coerceIn(0, publication.chapters.lastIndex)
                     currentScrollY = annotation.scrollY
                     pendingScrollY = annotation.scrollY
+                    pendingAnnotationId = annotation.id.takeIf { annotation.type == ReaderAnnotationType.HIGHLIGHT }  // ✅
                 },
                 onDeleteAnnotation = onDeleteAnnotation,
                 onPremiumRequired = onPremiumRequired
@@ -645,7 +657,7 @@ private fun Fb2ReaderContent(
     onProgress: (String) -> Unit,
     onAddBookmark: (Int, Int, String) -> Unit,
     onDeleteBookmark: (Long) -> Unit,
-    onAddHighlight: (Int, Int, String, String) -> Unit,
+    onAddHighlight: (Int, Int, String, String, String?) -> Unit,
     onAddNote: (Int, Int, String, String) -> Unit,
     onDeleteAnnotation: (Long) -> Unit,
     isPremium: Boolean,
@@ -662,6 +674,7 @@ private fun Fb2ReaderContent(
     var chapterIndex by remember { mutableIntStateOf(document.lastLocation.chapterIndexOrDefault()) }
     var currentScrollY by remember { mutableIntStateOf(document.lastLocation.scrollYOrDefault()) }
     var pendingScrollY by remember { mutableStateOf<Int?>(document.lastLocation.scrollYOrDefault()) }
+    var pendingAnnotationId by remember { mutableStateOf<Long?>(null) }
     val isSystemDark = isSystemInDarkTheme()
 
     LaunchedEffect(chapterIndex, publication?.chapters?.size) {
@@ -740,19 +753,22 @@ private fun Fb2ReaderContent(
                         addJavascriptInterface(
                             ReaderAnnotationBridge(
                                 isPremium = isPremium,
-                                onHighlight = { text, color, scrollY ->
-                                    post { onAddHighlight(chapterIndex, scrollY, text, color) }
+                                onHighlight = { text, color, scrollY, anchor ->
+                                    post { onAddHighlight(chapterIndex, scrollY, text, color, anchor) }
+                                },
+                                onScroll = { scrollY ->
+                                    post {
+                                        val safeScrollY = scrollY.coerceAtLeast(0)
+                                        if (safeScrollY != currentScrollY) {
+                                            currentScrollY = safeScrollY
+                                            onProgress(formatTextLocation(chapterIndex, currentScrollY))
+                                        }
+                                    }
                                 },
                                 onPremiumRequired = { post(onPremiumRequired) }
                             ),
                             READER_ANNOTATION_BRIDGE
                         )
-                        setOnScrollChangeListener { _, _, scrollY, _, _ ->
-                            if (scrollY != currentScrollY) {
-                                currentScrollY = scrollY.coerceAtLeast(0)
-                                onProgress(formatTextLocation(chapterIndex, currentScrollY))
-                            }
-                        }
                         installHorizontalPageFlingNavigation(
                             onSwipeLeft = { chapterIndex = (chapterIndex + 1).coerceAtMost(publication.chapters.lastIndex) },
                             onSwipeRight = { chapterIndex = (chapterIndex - 1).coerceAtLeast(0) }
@@ -763,23 +779,31 @@ private fun Fb2ReaderContent(
                     webView.settings.textZoom = readerSettings.fontSizePercent
                     val contentKey = "${document.uri}-${chapterIndex}-${readerSettings}-${isSystemDark}-${chapterAnnotations.annotationKey()}"
                     webView.setBackgroundColor(Color.parseColor(readerSettings.backgroundColor(isSystemDark)))
-                    if (webView.tag != contentKey) {
+                    val webViewState = webView.tag as? ReaderWebViewState
+                    if (webViewState?.contentKey != contentKey) {
                         val html = buildReadableEpubHtml(chapter.html, readerSettings, isSystemDark, chapterAnnotations)
-                        webView.tag = contentKey
+                        val scrollY = (pendingScrollY ?: currentScrollY).coerceAtLeast(0)
+                        val annotationId = pendingAnnotationId
+                        pendingScrollY = null
+                        pendingAnnotationId = null
+                        webView.webViewClient = RestoringScrollWebViewClient(contentKey)
+                        webView.tag = ReaderWebViewState(contentKey, scrollY, annotationId)
                         webView.loadDataWithBaseURL(
-                            "https://bookshelf.local/fb2/${document.id}/$chapterIndex/",
+                            "https://bookshelf.local/epub/${document.id}/$chapterIndex/",
                             html,
                             "text/html",
                             "utf-8",
                             null
                         )
-                        val scrollY = pendingScrollY ?: currentScrollY
+                    } else {
+                        val annotationId = pendingAnnotationId
+                        val scrollY = pendingScrollY
+                        pendingAnnotationId = null
                         pendingScrollY = null
-                        webView.post { webView.scrollTo(0, scrollY) }
-                    }
-                    pendingScrollY?.let { scrollY ->
-                        pendingScrollY = null
-                        webView.post { webView.scrollTo(0, scrollY) }
+                        when {
+                            annotationId != null -> webView.restoreReaderAnnotation(annotationId)
+                            scrollY != null -> webView.restoreReaderScroll(scrollY)
+                        }
                     }
                 }
             )
@@ -813,6 +837,7 @@ private fun Fb2ReaderContent(
                     chapterIndex = annotation.chapterIndex.coerceIn(0, publication.chapters.lastIndex)
                     currentScrollY = annotation.scrollY
                     pendingScrollY = annotation.scrollY
+                    pendingAnnotationId = annotation.id.takeIf { annotation.type == ReaderAnnotationType.HIGHLIGHT }  // ✅
                 },
                 onDeleteAnnotation = onDeleteAnnotation,
                 onPremiumRequired = onPremiumRequired
@@ -1148,6 +1173,69 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
     else -> null
 }
 
+private data class ReaderWebViewState(
+    val contentKey: String,
+    val restoreScrollY: Int?,
+    val restoreAnnotationId: Long? = null
+)
+
+private class RestoringScrollWebViewClient(
+    private val contentKey: String
+) : WebViewClient() {
+    override fun onPageFinished(view: WebView, url: String?) {
+        super.onPageFinished(view, url)
+        val state = view.tag as? ReaderWebViewState ?: return
+        if (state.contentKey != contentKey) return
+        val annotationId = state.restoreAnnotationId
+        if (annotationId != null) {
+            view.restoreReaderAnnotation(annotationId) {
+                val latestState = view.tag as? ReaderWebViewState
+                latestState?.contentKey == contentKey
+            }
+        } else {
+            val scrollY = state.restoreScrollY ?: return
+            view.restoreReaderScroll(scrollY) {
+                val latestState = view.tag as? ReaderWebViewState
+                latestState?.contentKey == contentKey
+            }
+        }
+        val currentState = view.tag as? ReaderWebViewState
+        if (currentState?.contentKey == contentKey) {
+            view.tag = currentState.copy(restoreScrollY = null, restoreAnnotationId = null)
+        }
+    }
+}
+
+private fun WebView.restoreReaderAnnotation(
+    annotationId: Long,
+    shouldRestore: () -> Boolean = { true }
+) {
+    postDelayed(
+        {
+            if (shouldRestore()) {
+                evaluateJavascript("window.inkwellScrollToAnnotation && window.inkwellScrollToAnnotation($annotationId);", null)
+            }
+        },
+        50L
+    )
+}
+
+private fun WebView.restoreReaderScroll(
+    scrollY: Int,
+    shouldRestore: () -> Boolean = { true }
+) {
+    val safeScrollY = scrollY.coerceAtLeast(0)
+    postDelayed(
+        {
+            if (shouldRestore()) {
+                scrollTo(0, safeScrollY)
+                evaluateJavascript("window.scrollTo(0, $safeScrollY);", null)
+            }
+        },
+        50L
+    )
+}
+
 private class PdfRendererHolder(
     private val descriptor: ParcelFileDescriptor,
     val renderer: PdfRenderer
@@ -1294,7 +1382,7 @@ private fun buildReadableEpubHtml(
     val highlightsJson = annotations
         .filter { it.type == ReaderAnnotationType.HIGHLIGHT && it.selectedText.isNotBlank() }
         .joinToString(prefix = "[", postfix = "]") { annotation ->
-            "{text:${JSONObject.quote(annotation.selectedText)},color:${JSONObject.quote(annotation.colorHex)}}"
+            "{id:${annotation.id},text:${JSONObject.quote(annotation.selectedText)},color:${JSONObject.quote(annotation.colorHex)},scrollY:${annotation.scrollY.coerceAtLeast(0)},anchor:${annotation.anchor?.let(JSONObject::quote) ?: "null"}}"
         }
 
     return """
@@ -1385,8 +1473,36 @@ private fun buildReadableEpubHtml(
                     const savedHighlights = $highlightsJson;
                     const tools = document.getElementById('inkwell-highlight-tools');
                     let selectedText = '';
+                    let selectedScrollY = 0;
+                    let selectedAnchor = null;
+                    let lastReportedScrollY = -1;
+                    let scrollReportQueued = false;
 
-                    function applyHighlight(text, color) {
+                    function reportScrollPosition() {
+                        scrollReportQueued = false;
+                        const scrollY = Math.max(0, Math.round(window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0));
+                        if (scrollY !== lastReportedScrollY && window.$READER_ANNOTATION_BRIDGE) {
+                            lastReportedScrollY = scrollY;
+                            window.$READER_ANNOTATION_BRIDGE.updateScroll(scrollY);
+                        }
+                    }
+
+                    window.addEventListener('scroll', () => {
+                        if (!scrollReportQueued) {
+                            scrollReportQueued = true;
+                            window.requestAnimationFrame(reportScrollPosition);
+                        }
+                    }, { passive: true });
+                    setTimeout(reportScrollPosition, 0);
+
+                    function absoluteTopForRange(range) {
+                        const rect = range.getBoundingClientRect();
+                        const pageScrollY = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+                        return Math.max(0, Math.round(pageScrollY + rect.top));
+                    }
+
+                    function applyHighlight(item) {
+                        const text = item && item.text ? item.text : '';
                         if (!text) return;
                         const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
                         const nodes = [];
@@ -1397,29 +1513,116 @@ private fun buildReadableEpubHtml(
                             nodes.push({ node, start: combined.length, end: combined.length + node.nodeValue.length });
                             combined += node.nodeValue;
                         }
-                        const index = combined.indexOf(text);
-                        if (index < 0) return;
-                        const endIndex = index + text.length;
-                        const startNode = nodes.find(item => index >= item.start && index < item.end);
-                        const endNode = nodes.find(item => endIndex > item.start && endIndex <= item.end);
-                        if (!startNode || !endNode) return;
-                        const range = document.createRange();
-                        range.setStart(startNode.node, index - startNode.start);
-                        range.setEnd(endNode.node, endIndex - endNode.start);
+                        const ranges = [];
+                        let searchFrom = 0;
+                        while (searchFrom <= combined.length) {
+                            const index = combined.indexOf(text, searchFrom);
+                            if (index < 0) break;
+                            const endIndex = index + text.length;
+                            const startNode = nodes.find(nodeItem => index >= nodeItem.start && index < nodeItem.end);
+                            const endNode = nodes.find(nodeItem => endIndex > nodeItem.start && endIndex <= nodeItem.end);
+                            if (startNode && endNode) {
+                                const candidateRange = document.createRange();
+                                candidateRange.setStart(startNode.node, index - startNode.start);
+                                candidateRange.setEnd(endNode.node, endIndex - endNode.start);
+                                ranges.push(candidateRange);
+                            }
+                            searchFrom = index + Math.max(1, text.length);
+                        }
+                        if (!ranges.length) return;
+                        let targetRange = null;
+                        try {
+                            const anchor = item.anchor ? JSON.parse(item.anchor) : null;
+                            if (anchor && Number.isInteger(anchor.occurrence) && ranges[anchor.occurrence]) targetRange = ranges[anchor.occurrence];
+                        } catch (_) {}
+                        const targetScrollY = Math.max(0, Number(item.scrollY || 0));
+                        const range = targetRange || ranges.reduce((best, candidate) => {
+                            const bestDistance = Math.abs(absoluteTopForRange(best) - targetScrollY);
+                            const candidateDistance = Math.abs(absoluteTopForRange(candidate) - targetScrollY);
+                            return candidateDistance < bestDistance ? candidate : best;
+                        }, ranges[0]);
                         const mark = document.createElement('mark');
                         mark.className = 'inkwell-highlight';
-                        mark.style.backgroundColor = color;
+                        mark.dataset.annotationId = String(item.id);
+                        mark.style.backgroundColor = item.color;
                         mark.appendChild(range.extractContents());
                         range.insertNode(mark);
                     }
 
-                    savedHighlights.forEach(item => applyHighlight(item.text, item.color));
+                    function scrollRangeIntoView(range) {
+                        const rect = range.getBoundingClientRect();
+                        if (!rect) return false;
+                        const pageScrollY = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+                        const toolbarOffset = 72;
+                        window.scrollTo({ top: Math.max(0, Math.round(pageScrollY + rect.top - toolbarOffset)), left: 0, behavior: 'auto' });
+                        reportScrollPosition();
+                        return true;
+                    }
+
+                    window.inkwellScrollToAnnotation = function(annotationId) {
+                        const findAndScroll = function(attempt) {
+                            const matchingMark = document.querySelector('mark.inkwell-highlight[data-annotation-id="' + String(annotationId) + '"]');
+                            if (matchingMark) {
+                                const range = document.createRange();
+                                range.selectNodeContents(matchingMark);
+                                scrollRangeIntoView(range);
+                                return true;
+                            }
+                            if (attempt < 12) window.requestAnimationFrame(() => findAndScroll(attempt + 1));
+                            return false;
+                        };
+                        return findAndScroll(0);
+                    };
+
+                    savedHighlights.forEach(item => applyHighlight(item));
 
                     function updateTools() {
                         const selection = window.getSelection();
                         selectedText = selection ? selection.toString().trim() : '';
+                        selectedScrollY = currentSelectionScrollY(selection);
+                        selectedAnchor = currentSelectionAnchor(selection);
                         tools.style.display = selectedText ? 'flex' : 'none';
                     }
+
+                    function currentSelectionScrollY(selection) {
+                        if (!selection || selection.rangeCount === 0 || !selection.toString().trim()) {
+                            return Math.max(0, Math.round(window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0));
+                        }
+                        const range = selection.getRangeAt(0);
+                        const rect = range.getBoundingClientRect();
+                        const pageScrollY = window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+                        const toolbarOffset = 72;
+                        return Math.max(0, Math.round(pageScrollY + rect.top - toolbarOffset));
+                    }
+
+                    function currentSelectionAnchor(selection) {
+                        if (!selection || selection.rangeCount === 0 || !selection.toString().trim()) return null;
+                        const range = selection.getRangeAt(0);
+                        const text = selection.toString().trim();
+                        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+                        const nodes = [];
+                        let combined = '';
+                        let selectionStart = -1;
+                        while (walker.nextNode()) {
+                            const node = walker.currentNode;
+                            if (!node.parentElement || node.parentElement.closest('#inkwell-highlight-tools, mark')) continue;
+                            const start = combined.length;
+                            if (node === range.startContainer) selectionStart = start + range.startOffset;
+                            nodes.push(node);
+                            combined += node.nodeValue;
+                        }
+                        if (selectionStart < 0) return null;
+                        let occurrence = 0;
+                        let searchFrom = 0;
+                        while (true) {
+                            const index = combined.indexOf(text, searchFrom);
+                            if (index < 0 || index >= selectionStart) break;
+                            occurrence++;
+                            searchFrom = index + Math.max(1, text.length);
+                        }
+                        return JSON.stringify({ v: 1, occurrence: Math.max(0, occurrence) });
+                    }
+
                     document.addEventListener('selectionchange', updateTools);
                     document.addEventListener('touchend', () => setTimeout(updateTools, 50));
                     tools.querySelectorAll('button').forEach(button => {
@@ -1428,7 +1631,8 @@ private fun buildReadableEpubHtml(
                                 window.$READER_ANNOTATION_BRIDGE.addHighlight(
                                     selectedText,
                                     button.dataset.color,
-                                    Math.max(0, Math.round(window.scrollY))
+                                    selectedScrollY,
+                                    selectedAnchor
                                 );
                             }
                             window.getSelection().removeAllRanges();
@@ -1445,17 +1649,23 @@ private fun buildReadableEpubHtml(
 @Keep
 private class ReaderAnnotationBridge(
     private val isPremium: Boolean,
-    private val onHighlight: (String, String, Int) -> Unit,
+    private val onHighlight: (String, String, Int, String?) -> Unit,
+    private val onScroll: (Int) -> Unit,
     private val onPremiumRequired: () -> Unit
 ) {
     @JavascriptInterface
-    fun addHighlight(text: String, color: String, scrollY: Int) {
+    fun addHighlight(text: String, color: String, scrollY: Int, anchor: String?) {
         if (!isPremium) {
             onPremiumRequired()
             return
         }
         val safeColor = color.takeIf { it in READER_HIGHLIGHT_COLORS } ?: READER_HIGHLIGHT_COLORS.first()
-        onHighlight(text.trim().take(2_000), safeColor, scrollY.coerceAtLeast(0))
+        onHighlight(text.trim().take(2_000), safeColor, scrollY.coerceAtLeast(0), anchor)
+    }
+
+    @JavascriptInterface
+    fun updateScroll(scrollY: Int) {
+        onScroll(scrollY.coerceAtLeast(0))
     }
 }
 
